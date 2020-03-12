@@ -36,9 +36,11 @@ MAX_ENCODING = 16384
 class CimbTranslator:
     def __init__(self):
         self.hashes = {}
+        self.img = {}
         for i in range(32):
             name = f'bitmap/{i:02x}.png'
-            ahash = imagehash.average_hash(Image.open(name))
+            self.img[i] = Image.open(name)
+            ahash = imagehash.average_hash(self.img[i])
             self.hashes[i] = ahash
 
     def get_best_fit(self, cell_hash):
@@ -58,6 +60,9 @@ class CimbTranslator:
     def decode(self, img_cell):
         cell_hash = imagehash.average_hash(img_cell)
         return self.get_best_fit(cell_hash)
+
+    def encode(self, bits):
+        return self.img[bits]
 
 
 class bit_file:
@@ -115,11 +120,29 @@ def decode(src_image, outfile):
             f.write(bits)
 
 
+def encode(src_data, dst_image):
+    img = Image.new('RGB', (1024, 1024), color=(255, 255, 255))
+    ct = CimbTranslator()
+
+    cols = CELL_DIMENSIONS
+    cells = CELL_DIMENSIONS * cols
+
+    with bit_file(src_data, bits_per_op=5) as f:
+        for i in range(cells):
+            x = (i % cols) * CELL_SPACING
+            y = (i // cols) * CELL_SPACING
+            bits = f.read()
+            encoded = ct.encode(bits)
+            img.paste(encoded, (x, y))
+    img.save(dst_image)
+
+
 def main():
     args = docopt(__doc__, version='CIMBar 0.0.1')
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
         dst_image = args['<dst_image>'] or args['--dst_image']
+        encode(src_data, dst_image)
         return
 
     src_image = args['<src_image>'] or args['--src_image']
