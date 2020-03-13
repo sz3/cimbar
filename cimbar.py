@@ -3,7 +3,7 @@
 """color-iconographic-matrix barcode
 
 Usage:
-  ./cimbar.py [<src_image> | --src_image=<filename>] [<dst_data> | --dst_data=<filename>]
+  ./cimbar.py [<src_image> | --src_image=<filename>] [<dst_data> | --dst_data=<filename>] [--deskew]
   ./cimbar.py --encode [<src_data> | --src_data=<filename>] [<dst_image> | --dst_image=<filename>]
   ./cimbar.py (-h | --help)
 
@@ -140,7 +140,38 @@ def cell_positions(spacing, dimensions, marker_size=8):
         yield x, y
 
 
-def decode(src_image, outfile):
+def detect_and_deskew(src_image):
+    import cv2
+    import numpy
+
+    img = cv2.imread(src_image)
+    qrDecoder = cv2.QRCodeDetector()
+    res = qrDecoder.detect(img)
+    if not res[0]:
+        print('didnt detect anything! :|')
+        return
+    # all corners should be 5px from image border
+    # i.e. width is CELL_DIMENSIONS * CELL_SPACING - 10px
+    top_left = tuple(map(tuple, res[1][0]))[0]
+    bottom_left = tuple(map(tuple, res[1][1]))[0]
+    bottom_right = tuple(map(tuple, res[1][2]))[0]  # speculative
+    top_right = tuple(map(tuple, res[1][3]))[0]
+
+    # print(f'top left: {top_left}, top right: {top_right}, bottom right: {bottom_right}, bottom left: {bottom_left}')
+
+    size = CELL_DIMENSIONS * CELL_SPACING
+    input_pts = numpy.float32([top_left, top_right, bottom_right, bottom_left])
+    output_pts = numpy.float32([[5, 5], [5, size-5], [size-5, size-5], [size-5, 5]])
+    transformer = cv2.getPerspectiveTransform(input_pts, output_pts)
+    correct_prespective = cv2.warpPerspective(img, transformer, (size, size))
+    cv2.imwrite('/tmp/test.png', correct_prespective)
+
+
+def decode(src_image, outfile, deskew=True):
+    if deskew:
+        detect_and_deskew(src_image)
+        return
+
     img = Image.open(src_image)
     ct = CimbTranslator()
 
@@ -173,7 +204,7 @@ def main():
 
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data)
+    decode(src_image, dst_data, args['--deskew'])
 
 
 if __name__ == '__main__':
