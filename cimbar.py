@@ -27,6 +27,7 @@ from docopt import docopt
 from PIL import Image
 
 
+BITS_PER_OP = 5
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE
 CELL_DIMENSIONS = 128
@@ -104,33 +105,58 @@ class bit_file:
         self.stream.tofile(self.f)
 
 
+def cell_positions(spacing, dimensions, marker_size=8):
+    '''
+    8 tiles at top is 128-16 == 112
+    8 tiles at bottom is 128-8 == 120
+
+    112 * 8
+    128 * 112
+    120 * 8
+    '''
+    #cells = dimensions * dimensions
+    marker_offset_x = spacing * marker_size
+    top_width = dimensions - marker_size - marker_size
+    top_cells = top_width * marker_size
+    for i in range(top_cells):
+        x = (i % top_width) * spacing + marker_offset_x
+        y = (i // top_width) * spacing
+        yield x, y
+
+    mid_y = marker_size * spacing
+    mid_width = dimensions
+    mid_cells = mid_width * top_width  # top_width is also "mid_height"
+    for i in range(mid_cells):
+        x = (i % mid_width) * spacing
+        y = (i // mid_width) * spacing + mid_y
+        yield x, y
+
+    bottom_y = (dimensions - marker_size) * spacing
+    bottom_width = dimensions - marker_size
+    bottom_cells = bottom_width * marker_size
+    for i in range(bottom_cells):
+        x = (i % bottom_width) * spacing + marker_offset_x
+        y = (i // bottom_width) * spacing + bottom_y
+        yield x, y
+
+
 def decode(src_image, outfile):
     img = Image.open(src_image)
     ct = CimbTranslator()
 
-    cols = CELL_DIMENSIONS
-    cells = CELL_DIMENSIONS * cols
-
-    with bit_file(outfile, bits_per_op=5, mode='write') as f:
-        for i in range(cells):
-            x = (i % cols) * CELL_SPACING
-            y = (i // cols) * CELL_SPACING
+    with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
+        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             img_cell = img.crop((x, y, x + CELL_SIZE, y + CELL_SIZE))
             bits = ct.decode(img_cell)
             f.write(bits)
 
 
 def encode(src_data, dst_image):
-    img = Image.new('RGB', (1024, 1024), color=(255, 255, 255))
+    img = Image.open('bitmap/template.png')
     ct = CimbTranslator()
 
-    cols = CELL_DIMENSIONS
-    cells = CELL_DIMENSIONS * cols
-
-    with bit_file(src_data, bits_per_op=5) as f:
-        for i in range(cells):
-            x = (i % cols) * CELL_SPACING
-            y = (i // cols) * CELL_SPACING
+    with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
+        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             bits = f.read()
             encoded = ct.encode(bits)
             img.paste(encoded, (x, y))
