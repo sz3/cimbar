@@ -134,12 +134,43 @@ class CimbarScanner:
             results += list(self.diagonal_scan(x, y))
         return results
 
+    def deduplicate_candidates(self, candidates):
+        # group
+        group = []
+        for x, y in candidates:
+            done = False
+            for i, elem in enumerate(group):
+                repX = elem[0][0]
+                repY = elem[0][1]
+                if abs(x - repX) < 10 and abs(y - repY) < 10:
+                    group[i].append((x,y))
+                    done = True
+                    continue
+            if not done:
+                group.append([(x, y)])
+
+        # average
+        average = []
+        for c in group:
+            sumX = sumY = 0
+            for x, y in c:
+                sumX += x
+                sumY += y
+            x = sumX // len(c)
+            y = sumY // len(c)
+            average.append((x, y))
+        return average
+
     def scan(self):
+        # these need to be ranges, not just points
         candidates = self.t1_scan_horizontal()
         t2_candidates = self.t2_scan_vertical(candidates)
+        # if duplicate candidates (e.g. within 10px or so), deduplicate
         t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        print(candidates)
         print(t2_candidates)
         print(t3_candidates)
+        print(self.deduplicate_candidates(t3_candidates))
         return t3_candidates
 
 
