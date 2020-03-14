@@ -23,7 +23,6 @@ class ScanState:
             if not s:
                 return None
         center = ones.pop(2)
-        print('evaluating state, {} vs {}'.format(ones, center))
         for s in ones:
             ratio = center / s
             if ratio < 2.5 or ratio > 3.5:
@@ -41,8 +40,6 @@ class ScanState:
 
             if self.state == 6:
                 res = self.evaluate_state()
-                if res:
-                    print('evaluated {} as {}'.format(self.tally, res))
                 self.pop_state()
                 return res
             return None
@@ -72,16 +69,78 @@ class CimbarScanner:
             black = self.img[x, y] < 127
             res = state.process(black)
             if res:
-                print('found possible anchor at {}-{},{}'.format(x - res, x, y))
+                #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
+                yield (x-(res//2), y)
 
-    def scan(self):
+    def vertical_scan(self, x):
+        state = ScanState()
+        for y in range(self.width):
+            black = self.img[x, y] < 127
+            res = state.process(black)
+            if res:
+                #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
+                yield (x, y-(res//2))
+
+    def diagonal_scan(self, x, y):
+        # find top/left point first, then go down right
+        offset = abs(x - y)
+        if x < y:
+            start_y = offset
+            start_x = 0
+        else:
+            start_x = offset
+            start_y = 0
+
+        state = ScanState()
+        for i in range(self.width - offset):
+            x = start_x + i
+            y = start_y + i
+            black = self.img[x, y] < 127
+            res = state.process(black)
+            if res:
+                print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
+                yield (x-(res//2), y-(res//2))
+
+    def t1_scan_horizontal(self):
+        '''
+        gets a smart answer for Xs
+        '''
+        results = []
         y = 0
         y += self.skip
         while y < self.height:  # eventually != 0?
             if y > self.height:
                 y = y % self.height
-            self.horizontal_scan(y)
+            results += list(self.horizontal_scan(y))
             y += self.skip
+        return results
+
+    def t2_scan_vertical(self, candidates):
+        '''
+        gets a smart answer for Ys
+        '''
+        results = []
+        xs = set([x for x, y in candidates])
+        for x in xs:
+            results += list(self.vertical_scan(x))
+        return results
+
+    def t3_scan_diagonal(self, candidates):
+        '''
+        confirm tokens
+        '''
+        results = []
+        for x, y in candidates:
+            results += list(self.diagonal_scan(x, y))
+        return results
+
+    def scan(self):
+        candidates = self.t1_scan_horizontal()
+        t2_candidates = self.t2_scan_vertical(candidates)
+        t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        print(t2_candidates)
+        print(t3_candidates)
+        return t3_candidates
 
 
 def detector(img):
