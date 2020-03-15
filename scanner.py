@@ -3,6 +3,7 @@ import cv2
 import numpy
 
 
+# should be thought of as a line, not an area
 class Anchor:
     __slots__ = 'x', 'xmax', 'y', 'ymax'
 
@@ -107,26 +108,19 @@ class CimbarScanner:
             yield Anchor(x=x-res, xmax=x, y=y)
 
     def vertical_scan(self, x):
-        xmax = x
-        xmin = x
-        if isinstance(x, Anchor):
-            xmax = x.xmax
-            xmin = x.x
-            x = x.xavg
-
         state = ScanState()
         for y in range(self.height):
             black = self.img[x, y] < 127
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
-                yield Anchor(x=xmin, xmax=xmax, y=y-res, ymax=y)
+                yield Anchor(x=x, y=y-res, ymax=y)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
             y = self.height
-            yield Anchor(x=xmin, xmax=xmax, y=y-res, ymax=y)
+            yield Anchor(x=x, y=y-res, ymax=y)
 
     def diagonal_scan(self, x, y):
         # find top/left point first, then go down right
@@ -174,8 +168,9 @@ class CimbarScanner:
         gets a smart answer for Ys
         '''
         results = []
-        for p in candidates:
-            results += list(self.vertical_scan(p))
+        xs = set([p.xavg for p in candidates])
+        for x in xs:
+            results += list(self.vertical_scan(x))
         return self.deduplicate_candidates(results)
 
     def t3_scan_diagonal(self, candidates):
@@ -185,7 +180,7 @@ class CimbarScanner:
         results = []
         for p in candidates:
             results += list(self.diagonal_scan(p.xavg, p.yavg))
-        return results
+        return self.deduplicate_candidates(results)
 
     def deduplicate_candidates(self, candidates):
         # group
@@ -211,7 +206,8 @@ class CimbarScanner:
         return average
 
     def scan(self):
-        # these need to be ranges, not just points
+        # do these need to track all known ranges, so we can approximate bounding lines?
+        # also not clear if we should dedup at every step or not
         candidates = self.t1_scan_horizontal()
         t2_candidates = self.t2_scan_vertical(candidates)
         # if duplicate candidates (e.g. within 10px or so), deduplicate
@@ -219,7 +215,6 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-        print(self.deduplicate_candidates(t3_candidates))
         return t3_candidates
 
 
