@@ -107,19 +107,26 @@ class CimbarScanner:
             yield Anchor(x=x-res, xmax=x, y=y)
 
     def vertical_scan(self, x):
+        xmax = x
+        xmin = x
+        if isinstance(x, Anchor):
+            xmax = x.xmax
+            xmin = x.x
+            x = x.xavg
+
         state = ScanState()
         for y in range(self.height):
             black = self.img[x, y] < 127
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
-                yield Anchor(x=x, y=y-res, ymax=y)
+                yield Anchor(x=xmin, xmax=xmax, y=y-res, ymax=y)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
             y = self.height
-            yield Anchor(x=x, y=y-res, ymax=y)
+            yield Anchor(x=xmin, xmax=xmax, y=y-res, ymax=y)
 
     def diagonal_scan(self, x, y):
         # find top/left point first, then go down right
@@ -160,17 +167,16 @@ class CimbarScanner:
                 y = y % self.height
             results += list(self.horizontal_scan(y))
             y += self.skip
-        return results
+        return self.deduplicate_candidates(results)
 
     def t2_scan_vertical(self, candidates):
         '''
         gets a smart answer for Ys
         '''
         results = []
-        xs = set([p.xavg for p in candidates])
-        for x in xs:
-            results += list(self.vertical_scan(x))
-        return results
+        for p in candidates:
+            results += list(self.vertical_scan(p))
+        return self.deduplicate_candidates(results)
 
     def t3_scan_diagonal(self, candidates):
         '''
@@ -188,7 +194,7 @@ class CimbarScanner:
             done = False
             for i, elem in enumerate(group):
                 rep = elem[0]
-                if abs(p.xavg - rep.xavg) < 10 and abs(p.yavg - rep.yavg) < 10:
+                if abs(p.xavg - rep.xavg) < 25 and abs(p.yavg - rep.yavg) < 25:
                     group[i].append(p)
                     done = True
                     continue
