@@ -108,11 +108,11 @@ class bit_file:
 def cell_positions(spacing, dimensions, marker_size=8):
     '''
     8 tiles at top is 128-16 == 112
-    8 tiles at bottom is 128-8 == 120
+    8 tiles at bottom is also 128-16 == 112
 
     112 * 8
     128 * 112
-    120 * 8
+    112 * 8
     '''
     #cells = dimensions * dimensions
     marker_offset_x = spacing * marker_size
@@ -132,7 +132,7 @@ def cell_positions(spacing, dimensions, marker_size=8):
         yield x, y
 
     bottom_y = (dimensions - marker_size) * spacing
-    bottom_width = dimensions - marker_size
+    bottom_width = top_width
     bottom_cells = bottom_width * marker_size
     for i in range(bottom_cells):
         x = (i % bottom_width) * spacing + marker_offset_x

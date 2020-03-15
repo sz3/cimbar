@@ -32,6 +32,10 @@ class Anchor:
         yrange = abs(self.y - self.ymax) // 2
         return f'({self.xavg}+-{xrange}, {self.yavg}+-{yrange})'
 
+    def __lt__(self, rhs):
+        # distance from top left corner
+        return self.xavg + self.yavg < rhs.xavg + rhs.yavg
+
 
 class ScanState:
     def __init__(self):
@@ -95,7 +99,7 @@ class CimbarScanner:
         # for each column, look for the 1:1:3:1:1 pattern
         state = ScanState()
         for x in range(self.width):
-            black = self.img[x, y] < 127
+            black = self.img[y, x] < 127
             res = state.process(black)
             if res:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
@@ -110,7 +114,7 @@ class CimbarScanner:
     def vertical_scan(self, x):
         state = ScanState()
         for y in range(self.height):
-            black = self.img[x, y] < 127
+            black = self.img[y, x] < 127
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
@@ -136,7 +140,7 @@ class CimbarScanner:
         for i in range(self.width - offset):
             x = start_x + i
             y = start_y + i
-            black = self.img[x, y] < 127
+            black = self.img[y, x] < 127
             res = state.process(black)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
@@ -205,6 +209,10 @@ class CimbarScanner:
             average.append(area)
         return average
 
+    def sort_top_to_bottom(self, candidates):
+        candidates.sort()
+        return [(p.xavg, p.yavg) for p in candidates]
+
     def scan(self):
         # do these need to track all known ranges, so we can approximate bounding lines?
         # also not clear if we should dedup at every step or not
@@ -215,39 +223,39 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-        return t3_candidates
+        return self.sort_top_to_bottom(t3_candidates)
 
 
 def detector(img):
     cs = CimbarScanner(img, 17)
-    cs.scan()
-    return 'ok'
+    return cs.scan()
 
 
 def deskewer(src_image):
     img = cv2.imread(src_image)
     res = detector(img)
     print(res)
-    '''
-    if not res[0]:
-        print('didnt detect anything! :|')
-        return
-    # all corners should be 5px from image border
-    # i.e. width is CELL_DIMENSIONS * CELL_SPACING - 10px
-    top_left = tuple(map(tuple, res[1][0]))[0]
-    bottom_left = tuple(map(tuple, res[1][1]))[0]
-    bottom_right = tuple(map(tuple, res[1][2]))[0]  # speculative
-    top_right = tuple(map(tuple, res[1][3]))[0]
-    '''
 
+    if len(res) < 4:
+        print('didnt detect enough points! :(')
+        return
+
+    ''' given a 1024x1024 image, corners should correspond to:
+     (28, 28)
+     (996, 28)
+     (28, 996)
+     (996, 996)
+    '''
+    # i.e. width is CELL_DIMENSIONS * CELL_SPACING
+    top_left, top_right, bottom_left, bottom_right = res
     # print(f'top left: {top_left}, top right: {top_right}, bottom right: {bottom_right}, bottom left: {bottom_left}')
 
-    '''size = 1024
+    size = 1024
     input_pts = numpy.float32([top_left, top_right, bottom_right, bottom_left])
-    output_pts = numpy.float32([[5, 5], [5, size-5], [size-5, size-5], [size-5, 5]])
+    output_pts = numpy.float32([[28, 28], [size-28, 28], [size-28, size-28], [28, size-28]])
     transformer = cv2.getPerspectiveTransform(input_pts, output_pts)
     correct_prespective = cv2.warpPerspective(img, transformer, (size, size))
-    cv2.imwrite('/tmp/test.png', correct_prespective)'''
+    cv2.imwrite('/tmp/test.png', correct_prespective)
 
 
 def main():
