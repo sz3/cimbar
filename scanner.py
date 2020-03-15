@@ -72,6 +72,11 @@ class CimbarScanner:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
                 yield (x-(res//2), y)
 
+        # if the pattern is at the edge of the image
+        res = state.process(False)
+        if res:
+            yield (x-(res//2), y)
+
     def vertical_scan(self, x):
         state = ScanState()
         for y in range(self.width):
@@ -80,6 +85,11 @@ class CimbarScanner:
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
                 yield (x, y-(res//2))
+
+         # if the pattern is at the edge of the image
+        res = state.process(False)
+        if res:
+            yield (x, y-(res//2))
 
     def diagonal_scan(self, x, y):
         # find top/left point first, then go down right
@@ -100,6 +110,11 @@ class CimbarScanner:
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
                 yield (x-(res//2), y-(res//2))
+
+         # if the pattern is at the edge of the image
+        res = state.process(False)
+        if res:
+            yield (x-(res//2), y-(res//2))
 
     def t1_scan_horizontal(self):
         '''
