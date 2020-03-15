@@ -3,6 +3,34 @@ import cv2
 import numpy
 
 
+class Anchor:
+    __slots__ = 'x', 'xmax', 'y', 'ymax'
+
+    def __init__(self, x, y, xmax=None, ymax=None):
+        self.x = x
+        self.y = y
+        self.xmax = xmax or x
+        self.ymax = ymax or y
+
+    def merge(self, rhs):
+        self.x = min(self.x, rhs.x)
+        self.xmax = max(self.xmax, rhs.xmax)
+        self.y = min(self.y, rhs.y)
+        self.ymax = max(self.ymax, rhs.ymax)
+
+    @property
+    def xavg(self):
+        return (self.x + self.xmax) // 2
+
+    @property
+    def yavg(self):
+        return (self.y + self.ymax) // 2
+
+    def __repr__(self):
+        xrange = abs(self.x - self.xmax) // 2
+        yrange = abs(self.y - self.ymax) // 2
+        return f'({self.xavg}+-{xrange}, {self.yavg}+-{yrange})'
+
 
 class ScanState:
     def __init__(self):
@@ -70,26 +98,28 @@ class CimbarScanner:
             res = state.process(black)
             if res:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
-                yield (x-(res//2), y)
+                yield Anchor(x=x-res, xmax=x, y=y)
 
         # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
-            yield (x-(res//2), y)
+            x = self.width
+            yield Anchor(x=x-res, xmax=x, y=y)
 
     def vertical_scan(self, x):
         state = ScanState()
-        for y in range(self.width):
+        for y in range(self.height):
             black = self.img[x, y] < 127
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
-                yield (x, y-(res//2))
+                yield Anchor(x=x, y=y-res, ymax=y)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
-            yield (x, y-(res//2))
+            y = self.height
+            yield Anchor(x=x, y=y-res, ymax=y)
 
     def diagonal_scan(self, x, y):
         # find top/left point first, then go down right
@@ -109,12 +139,14 @@ class CimbarScanner:
             res = state.process(black)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
-                yield (x-(res//2), y-(res//2))
+                yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
-            yield (x-(res//2), y-(res//2))
+            x = start_x + self.width - offset
+            y = start_y + self.width - offset
+            yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
 
     def t1_scan_horizontal(self):
         '''
@@ -135,7 +167,7 @@ class CimbarScanner:
         gets a smart answer for Ys
         '''
         results = []
-        xs = set([x for x, y in candidates])
+        xs = set([p.xavg for p in candidates])
         for x in xs:
             results += list(self.vertical_scan(x))
         return results
@@ -145,35 +177,31 @@ class CimbarScanner:
         confirm tokens
         '''
         results = []
-        for x, y in candidates:
-            results += list(self.diagonal_scan(x, y))
+        for p in candidates:
+            results += list(self.diagonal_scan(p.xavg, p.yavg))
         return results
 
     def deduplicate_candidates(self, candidates):
         # group
         group = []
-        for x, y in candidates:
+        for p in candidates:
             done = False
             for i, elem in enumerate(group):
-                repX = elem[0][0]
-                repY = elem[0][1]
-                if abs(x - repX) < 10 and abs(y - repY) < 10:
-                    group[i].append((x,y))
+                rep = elem[0]
+                if abs(p.xavg - rep.xavg) < 10 and abs(p.yavg - rep.yavg) < 10:
+                    group[i].append(p)
                     done = True
                     continue
             if not done:
-                group.append([(x, y)])
+                group.append([p])
 
         # average
         average = []
         for c in group:
-            sumX = sumY = 0
-            for x, y in c:
-                sumX += x
-                sumY += y
-            x = sumX // len(c)
-            y = sumY // len(c)
-            average.append((x, y))
+            area = c[0]
+            for p in c:
+                area.merge(p)
+            average.append(area)
         return average
 
     def scan(self):
