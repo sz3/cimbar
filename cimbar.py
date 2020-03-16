@@ -19,6 +19,8 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
 """
+from os import path
+from tempfile import TemporaryDirectory
 
 import bitstring
 import imagehash
@@ -140,39 +142,20 @@ def cell_positions(spacing, dimensions, marker_size=8):
         yield x, y
 
 
-def detect_and_deskew(src_image):
-    import cv2
-    import numpy
-
-    img = cv2.imread(src_image)
-    qrDecoder = cv2.QRCodeDetector()
-    res = qrDecoder.detect(img)
-    if not res[0]:
-        print('didnt detect anything! :|')
-        return
-    # all corners should be 5px from image border
-    # i.e. width is CELL_DIMENSIONS * CELL_SPACING - 10px
-    top_left = tuple(map(tuple, res[1][0]))[0]
-    bottom_left = tuple(map(tuple, res[1][1]))[0]
-    bottom_right = tuple(map(tuple, res[1][2]))[0]  # speculative
-    top_right = tuple(map(tuple, res[1][3]))[0]
-
-    # print(f'top left: {top_left}, top right: {top_right}, bottom right: {bottom_right}, bottom left: {bottom_left}')
-
-    size = CELL_DIMENSIONS * CELL_SPACING
-    input_pts = numpy.float32([top_left, top_right, bottom_right, bottom_left])
-    output_pts = numpy.float32([[5, 5], [5, size-5], [size-5, size-5], [size-5, 5]])
-    transformer = cv2.getPerspectiveTransform(input_pts, output_pts)
-    correct_prespective = cv2.warpPerspective(img, transformer, (size, size))
-    cv2.imwrite('/tmp/test.png', correct_prespective)
+def detect_and_deskew(src_image, temp_image):
+    from scanner import deskewer
+    deskewer(src_image, temp_image)
 
 
 def decode(src_image, outfile, deskew=True):
+    tempdir = None
     if deskew:
-        detect_and_deskew(src_image)
-        return
-
-    img = Image.open(src_image)
+        tempdir = TemporaryDirectory()
+        temp_img = path.join(tempdir.name, path.basename(src_image))
+        detect_and_deskew(src_image, temp_img)
+        img = Image.open(temp_img)
+    else:
+        img = Image.open(src_image)
     ct = CimbTranslator()
 
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
@@ -180,6 +163,10 @@ def decode(src_image, outfile, deskew=True):
             img_cell = img.crop((x, y, x + CELL_SIZE, y + CELL_SIZE))
             bits = ct.decode(img_cell)
             f.write(bits)
+
+    if tempdir:  # cleanup
+        with tempdir:
+            pass
 
 
 def encode(src_data, dst_image):

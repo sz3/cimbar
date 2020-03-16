@@ -103,13 +103,13 @@ class CimbarScanner:
             res = state.process(black)
             if res:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
-                yield Anchor(x=x-res, xmax=x, y=y)
+                yield Anchor(x=x-res, xmax=x-1, y=y)
 
         # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
             x = self.width
-            yield Anchor(x=x-res, xmax=x, y=y)
+            yield Anchor(x=x-res, xmax=x-1, y=y)
 
     def vertical_scan(self, x):
         state = ScanState()
@@ -118,13 +118,13 @@ class CimbarScanner:
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
-                yield Anchor(x=x, y=y-res, ymax=y)
+                yield Anchor(x=x, y=y-res, ymax=y-1)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
             y = self.height
-            yield Anchor(x=x, y=y-res, ymax=y)
+            yield Anchor(x=x, y=y-res, ymax=y-1)
 
     def diagonal_scan(self, x, y):
         # find top/left point first, then go down right
@@ -211,6 +211,13 @@ class CimbarScanner:
 
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
+        top_left = candidates[0]
+        p1 = candidates[1]
+        p2 = candidates[2]
+        p1_xoff = abs(p1.xavg - top_left.xavg)
+        p2_xoff = abs(p2.xavg - top_left.xavg)
+        if p2_xoff > p1_xoff:
+            candidates = [top_left, p2, p1, candidates[3]]
         return [(p.xavg, p.yavg) for p in candidates]
 
     def scan(self):
@@ -231,7 +238,7 @@ def detector(img):
     return cs.scan()
 
 
-def deskewer(src_image):
+def deskewer(src_image, dst_image):
     img = cv2.imread(src_image)
     res = detector(img)
     print(res)
@@ -255,12 +262,13 @@ def deskewer(src_image):
     output_pts = numpy.float32([[28, 28], [size-28, 28], [size-28, size-28], [28, size-28]])
     transformer = cv2.getPerspectiveTransform(input_pts, output_pts)
     correct_prespective = cv2.warpPerspective(img, transformer, (size, size))
-    cv2.imwrite('/tmp/test.png', correct_prespective)
+    cv2.imwrite(dst_image, correct_prespective)
 
 
 def main():
     src_image = sys.argv[1]
-    deskewer(src_image)
+    dst_image = sys.argv[2]
+    deskewer(src_image, dst_image)
 
 
 if __name__ == '__main__':
