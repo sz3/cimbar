@@ -84,13 +84,19 @@ class ScanState:
         return None
 
 
+def _the_works(img):
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = cv2.GaussianBlur(img,(17,17),0)
+    __,img = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    return img
+
+
 class CimbarScanner:
     def __init__(self, img, skip=17):
         '''
         image dimensions need to not be divisible by skip
         '''
-        self.img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, self.img = cv2.threshold(self.img, 127, 255, cv2.THRESH_BINARY)
+        self.img = _the_works(img)
         self.height, self.width = self.img.shape
         self.skip = skip
 
