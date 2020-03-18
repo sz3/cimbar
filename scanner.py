@@ -27,10 +27,16 @@ class Anchor:
     def yavg(self):
         return (self.y + self.ymax) // 2
 
+    @property
+    def xrange(self):
+        return abs(self.x - self.xmax) // 2
+
+    @property
+    def yrange(self):
+        return abs(self.y - self.ymax) // 2
+
     def __repr__(self):
-        xrange = abs(self.x - self.xmax) // 2
-        yrange = abs(self.y - self.ymax) // 2
-        return f'({self.xavg}+-{xrange}, {self.yavg}+-{yrange})'
+        return f'({self.xavg}+-{self.xrange}, {self.yavg}+-{self.yrange})'
 
     def __lt__(self, rhs):
         # distance from top left corner
@@ -92,20 +98,28 @@ def _the_works(img):
 
 
 class CimbarScanner:
-    def __init__(self, img, skip=17):
+    def __init__(self, img, dark=False, skip=17):
         '''
         image dimensions need to not be divisible by skip
         '''
-        self.img = _the_works(img)
+        self.img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, self.img = cv2.threshold(self.img, 127, 255, cv2.THRESH_BINARY)
         self.height, self.width = self.img.shape
+        self.dark = dark
         self.skip = skip
+
+    def _test_pixel(self, x, y):
+        if self.dark:
+            return self.img[y, x] > 127
+        else:
+            return self.img[y, x] < 127
 
     def horizontal_scan(self, y):
         # print('horizontal scan at {}'.format(y))
         # for each column, look for the 1:1:3:1:1 pattern
         state = ScanState()
         for x in range(self.width):
-            black = self.img[y, x] < 127
+            black = self._test_pixel(x, y)
             res = state.process(black)
             if res:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
@@ -120,7 +134,7 @@ class CimbarScanner:
     def vertical_scan(self, x):
         state = ScanState()
         for y in range(self.height):
-            black = self.img[y, x] < 127
+            black = self._test_pixel(x, y)
             res = state.process(black)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
@@ -146,7 +160,7 @@ class CimbarScanner:
         for i in range(self.width - offset):
             x = start_x + i
             y = start_y + i
-            black = self.img[y, x] < 127
+            black = self._test_pixel(x, y)
             res = state.process(black)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
@@ -199,7 +213,7 @@ class CimbarScanner:
             done = False
             for i, elem in enumerate(group):
                 rep = elem[0]
-                if abs(p.xavg - rep.xavg) < 25 and abs(p.yavg - rep.yavg) < 25:
+                if abs(p.xavg - rep.xavg) < 50 and abs(p.yavg - rep.yavg) < 50:
                     group[i].append(p)
                     done = True
                     continue
@@ -214,6 +228,17 @@ class CimbarScanner:
                 area.merge(p)
             average.append(area)
         return average
+
+    def filter_candidates(self, candidates):
+        if len(candidates) <= 4:
+            return candidates
+        xrange = sum([c.xrange for c in candidates])
+        yrange = sum([c.yrange for c in candidates])
+
+        xrange = xrange // len(candidates)
+        yrange = yrange // len(candidates)
+        return [c for c in candidates if c.xrange > xrange // 2 and c.yrange > yrange // 2]
+
 
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
@@ -236,17 +261,18 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-        return self.sort_top_to_bottom(t3_candidates)
+        final_candidates = self.filter_candidates(t3_candidates)
+        return self.sort_top_to_bottom(final_candidates)
 
 
-def detector(img):
-    cs = CimbarScanner(img, 17)
+def detector(img, dark):
+    cs = CimbarScanner(img, dark, 17)
     return cs.scan()
 
 
-def deskewer(src_image, dst_image):
+def deskewer(src_image, dst_image, dark=True):
     img = cv2.imread(src_image)
-    res = detector(img)
+    res = detector(img, dark)
     print(res)
 
     if len(res) < 4:

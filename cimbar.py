@@ -3,8 +3,8 @@
 """color-iconographic-matrix barcode
 
 Usage:
-  ./cimbar.py [<src_image> | --src_image=<filename>] [<dst_data> | --dst_data=<filename>] [--deskew]
-  ./cimbar.py --encode [<src_data> | --src_data=<filename>] [<dst_image> | --dst_image=<filename>]
+  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--deskew] [--dark]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -18,6 +18,7 @@ Options:
   --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
+  --dark                           Use dark mode.
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -37,14 +38,28 @@ MAX_ENCODING = 16384
 
 
 class CimbTranslator:
-    def __init__(self):
+    def __init__(self, dark):
+        self.dark = dark
         self.hashes = {}
         self.img = {}
         for i in range(32):
             name = f'bitmap/{i:02x}.png'
-            self.img[i] = Image.open(name)
+            self.img[i] = self._load_img(name)
             ahash = imagehash.average_hash(self.img[i])
             self.hashes[i] = ahash
+
+    def _load_img(self, name):
+        img = Image.open(name)
+        if not self.dark:
+            return img
+
+        pixdata = img.load()
+        width, height = img.size
+        for y in range(height):
+            for x in range(width):
+                if pixdata[x, y] == (255, 255, 255, 255):
+                    pixdata[x, y] = (0, 0, 0, 255)
+        return img
 
     def get_best_fit(self, cell_hash):
         min_distance = 1000
@@ -142,21 +157,21 @@ def cell_positions(spacing, dimensions, marker_size=8):
         yield x, y
 
 
-def detect_and_deskew(src_image, temp_image):
+def detect_and_deskew(src_image, temp_image, dark):
     from scanner import deskewer
-    deskewer(src_image, temp_image)
+    deskewer(src_image, temp_image, dark)
 
 
-def decode(src_image, outfile, deskew=True):
+def decode(src_image, outfile, dark=False, deskew=True):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img)
+        detect_and_deskew(src_image, temp_img, dark)
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
-    ct = CimbTranslator()
+    ct = CimbTranslator(dark)
 
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
@@ -169,9 +184,9 @@ def decode(src_image, outfile, deskew=True):
             pass
 
 
-def encode(src_data, dst_image):
+def encode(src_data, dst_image, dark=False):
     img = Image.open('bitmap/template.png')
-    ct = CimbTranslator()
+    ct = CimbTranslator(dark)
 
     with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
@@ -183,15 +198,17 @@ def encode(src_data, dst_image):
 
 def main():
     args = docopt(__doc__, version='CIMBar 0.0.1')
+
+    dark = args['--dark']
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
         dst_image = args['<dst_image>'] or args['--dst_image']
-        encode(src_data, dst_image)
+        encode(src_data, dst_image, dark)
         return
 
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, args['--deskew'])
+    decode(src_image, dst_data, dark, args['--deskew'])
 
 
 if __name__ == '__main__':
