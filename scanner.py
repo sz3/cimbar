@@ -157,20 +157,20 @@ class CimbarScanner:
             start_y = 0
 
         state = ScanState()
-        for i in range(self.width - offset):
-            x = start_x + i
-            y = start_y + i
+        x = start_x
+        y = start_y
+        while x < self.width and y < self.height:
             black = self._test_pixel(x, y)
             res = state.process(black)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
                 yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
+            x += 1
+            y += 1
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
-            x = start_x + self.width - offset
-            y = start_y + self.width - offset
             yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
 
     def t1_scan_horizontal(self):
