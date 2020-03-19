@@ -156,11 +156,14 @@ class CimbarScanner:
             start_x = offset
             start_y = 0
 
+        #print(f'scanning from {start_x}, {start_y} for {x},{y}')
+
         state = ScanState()
         x = start_x
         y = start_y
         while x < self.width and y < self.height:
             black = self._test_pixel(x, y)
+            # print(f'{x},{y} == {black}')
             res = state.process(black)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
@@ -270,7 +273,7 @@ def detector(img, dark):
     return cs.scan()
 
 
-def deskewer(src_image, dst_image, dark=True):
+def deskewer(src_image, dst_image, dark):
     img = cv2.imread(src_image)
     res = detector(img, dark)
     print(res)
@@ -300,7 +303,7 @@ def deskewer(src_image, dst_image, dark=True):
 def main():
     src_image = sys.argv[1]
     dst_image = sys.argv[2]
-    deskewer(src_image, dst_image)
+    deskewer(src_image, dst_image, dark=True)
 
 
 if __name__ == '__main__':
