@@ -173,22 +173,35 @@ def decode(src_image, outfile, dark=False, deskew=True):
         img = Image.open(src_image)
     ct = CimbTranslator(dark)
 
+    drift_x = drift_y = 0
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             best_distance = 1000
-            for dx, dy in [
-                    (0, 0), (1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, -1),
-                    (2, 0), (2, 1), (1, 2), (0, 2), (2, 2)]:
-                testX = x + dx
-                testY = y + dy
+            for dx, dy in [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]:
+                testX = x + drift_x + dx
+                testY = y + drift_y + dy
                 img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
                 bits, min_distance = ct.decode(img_cell)
                 best_distance = min(min_distance, best_distance)
                 if min_distance == best_distance:
                     best_bits = bits
+                    best_dx = dx
+                    best_dy = dy
                 if min_distance < 8:
                     break
             f.write(best_bits)
+            drift_x += best_dx
+            drift_y += best_dy
+            if drift_x > 2:
+                drift_x = 2
+            elif drift_x < -2:
+                drift_x = -2
+            if drift_y > 2:
+                drift_y = 2
+            elif drift_y < -2:
+                drift_y = -2
+            if best_dx != 0 or best_dy != 0:
+                print(f'at {x},{y}, drift is now {drift_x},{drift_y}')
 
     if tempdir:  # cleanup
         with tempdir:
