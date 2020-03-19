@@ -71,9 +71,9 @@ class CimbTranslator:
                 best_fit = i
             if min_distance == 0:
                 break
-        if min_distance > 0:
-            print(f'min distance is {min_distance}. best fit {best_fit}')
-        return best_fit
+        #if min_distance > 0:
+        #    print(f'min distance is {min_distance}. best fit {best_fit}')
+        return best_fit, min_distance
 
     def decode(self, img_cell):
         cell_hash = imagehash.average_hash(img_cell)
@@ -175,9 +175,20 @@ def decode(src_image, outfile, dark=False, deskew=True):
 
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
-            img_cell = img.crop((x, y, x + CELL_SIZE, y + CELL_SIZE))
-            bits = ct.decode(img_cell)
-            f.write(bits)
+            best_distance = 1000
+            for dx, dy in [
+                    (0, 0), (1, 0), (0, 1), (1, 1), (-1, 0), (0, -1), (-1, -1),
+                    (2, 0), (2, 1), (1, 2), (0, 2), (2, 2)]:
+                testX = x + dx
+                testY = y + dy
+                img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
+                bits, min_distance = ct.decode(img_cell)
+                best_distance = min(min_distance, best_distance)
+                if min_distance == best_distance:
+                    best_bits = bits
+                if min_distance < 8:
+                    break
+            f.write(best_bits)
 
     if tempdir:  # cleanup
         with tempdir:
