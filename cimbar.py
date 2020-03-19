@@ -83,6 +83,30 @@ class CimbTranslator:
         return self.img[bits]
 
 
+class cell_drift:
+    pairs = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+
+    def __init__(self, limit=2):
+        self.x = 0
+        self.y = 0
+        self.limit = limit
+
+    def update(self, dx, dy):
+        self.x += dx
+        self.y += dy
+        self._enforce_limit()
+
+    def _enforce_limit(self):
+        if self.x > self.limit:
+            self.x = self.limit
+        elif self.x < 0-self.limit:
+            self.x = 0-self.limit
+        if self.y > self.limit:
+            self.y = self.limit
+        elif self.y < 0-self.limit:
+            self.y = 0-self.limit
+
+
 class bit_file:
     def __init__(self, filename, bits_per_op, mode='read'):
         if mode not in ['read', 'write']:
@@ -173,13 +197,13 @@ def decode(src_image, outfile, dark=False, deskew=True):
         img = Image.open(src_image)
     ct = CimbTranslator(dark)
 
-    drift_x = drift_y = 0
+    drift = cell_drift()
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             best_distance = 1000
-            for dx, dy in [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]:
-                testX = x + drift_x + dx
-                testY = y + drift_y + dy
+            for dx, dy in drift.pairs:
+                testX = x + drift.x + dx
+                testY = y + drift.y + dy
                 img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
                 bits, min_distance = ct.decode(img_cell)
                 best_distance = min(min_distance, best_distance)
@@ -190,26 +214,28 @@ def decode(src_image, outfile, dark=False, deskew=True):
                 if min_distance < 8:
                     break
             f.write(best_bits)
-            drift_x += best_dx
-            drift_y += best_dy
-            if drift_x > 2:
-                drift_x = 2
-            elif drift_x < -2:
-                drift_x = -2
-            if drift_y > 2:
-                drift_y = 2
-            elif drift_y < -2:
-                drift_y = -2
-            if best_dx != 0 or best_dy != 0:
-                print(f'at {x},{y}, drift is now {drift_x},{drift_y}')
+            drift.update(best_dx, best_dy)
 
     if tempdir:  # cleanup
         with tempdir:
             pass
 
 
+def _get_image_template(width, dark):
+    color = (0, 0, 0) if dark else (255, 255, 255)
+    img = Image.new('RGB', (width, width), color=color)
+    anchor_src = 'bitmap/anchor-dark.png' if dark else 'bitmap/anchor-light.png'
+    anchor = Image.open(anchor_src)
+    aw, ah = anchor.size
+    img.paste(anchor, (0, 0))
+    img.paste(anchor, (0, width-ah))
+    img.paste(anchor, (width-aw, 0))
+    img.paste(anchor, (width-aw, width-ah))
+    return img
+
+
 def encode(src_data, dst_image, dark=False):
-    img = Image.open('bitmap/template.png')
+    img = _get_image_template(1024, dark)
     ct = CimbTranslator(dark)
 
     with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
