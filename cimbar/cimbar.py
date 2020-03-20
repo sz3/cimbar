@@ -28,6 +28,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cimb_translator import CimbTranslator, cell_drift, cell_positions
+from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 
 
@@ -53,7 +54,7 @@ def decode(src_image, outfile, dark=False, deskew=True):
     ct = CimbTranslator(dark)
 
     drift = cell_drift()
-    with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
+    with reed_solomon_stream(outfile, mode='write') as rss, bit_file(rss, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             best_distance = 1000
             for dx, dy in drift.pairs:
@@ -93,7 +94,7 @@ def encode(src_data, dst_image, dark=False):
     img = _get_image_template(1024, dark)
     ct = CimbTranslator(dark)
 
-    with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
+    with reed_solomon_stream(src_data) as rss, bit_file(rss, bits_per_op=BITS_PER_OP) as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             bits = f.read()
             encoded = ct.encode(bits)
