@@ -58,7 +58,7 @@ def _decode_cell(ct, img, x, y, drift):
     return best_bits, best_dx, best_dy
 
 
-def decode(src_image, outfile, dark=False, deskew=True):
+def decode_iter(src_image, dark, deskew):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -70,15 +70,20 @@ def decode(src_image, outfile, dark=False, deskew=True):
     ct = CimbTranslator(dark)
 
     drift = cell_drift()
-    with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
-            best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
-            f.write(best_bits)
-            drift.update(best_dx, best_dy)
+    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
+        best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
+        drift.update(best_dx, best_dy)
+        yield best_bits
 
     if tempdir:  # cleanup
         with tempdir:
             pass
+
+
+def decode(src_image, outfile, dark=False, deskew=True):
+    with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
+        for bits in decode_iter(src_image, dark, deskew):
+            f.write(bits)
 
 
 def _get_image_template(width, dark):
