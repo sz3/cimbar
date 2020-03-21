@@ -41,6 +41,23 @@ def detect_and_deskew(src_image, temp_image, dark):
     deskewer(src_image, temp_image, dark)
 
 
+def _decode_cell(ct, img, x, y, drift):
+    best_distance = 1000
+    for dx, dy in drift.pairs:
+        testX = x + drift.x + dx
+        testY = y + drift.y + dy
+        img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
+        bits, min_distance = ct.decode(img_cell)
+        best_distance = min(min_distance, best_distance)
+        if min_distance == best_distance:
+            best_bits = bits
+            best_dx = dx
+            best_dy = dy
+        if min_distance < 8:
+            break
+    return best_bits, best_dx, best_dy
+
+
 def decode(src_image, outfile, dark=False, deskew=True):
     tempdir = None
     if deskew:
@@ -55,19 +72,7 @@ def decode(src_image, outfile, dark=False, deskew=True):
     drift = cell_drift()
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
-            best_distance = 1000
-            for dx, dy in drift.pairs:
-                testX = x + drift.x + dx
-                testY = y + drift.y + dy
-                img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
-                bits, min_distance = ct.decode(img_cell)
-                best_distance = min(min_distance, best_distance)
-                if min_distance == best_distance:
-                    best_bits = bits
-                    best_dx = dx
-                    best_dy = dy
-                if min_distance < 8:
-                    break
+            best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
             f.write(best_bits)
             drift.update(best_dx, best_dy)
 
