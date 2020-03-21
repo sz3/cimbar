@@ -51,7 +51,7 @@ class ScanState:
         self.state -= 2
         self.tally = self.tally[2:]
 
-    def evaluate_state(self):
+    def evaluate_state(self, leniency):
         if self.state != 6:
             return None
         # ratio should be 1:1:3:1:1
@@ -62,28 +62,28 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < 2.5 or ratio > 3.5:
+            if ratio < leniency or ratio > 3.5:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
 
-    def process(self, black):
+    def process(self, active, leniency=2.5):
         # transitions first
-        is_transition = (self.state in [0, 2, 4] and black) or (self.state in [1, 3, 5] and not black)
+        is_transition = (self.state in [0, 2, 4] and active) or (self.state in [1, 3, 5] and not active)
         if is_transition:
             self.state += 1
             self.tally.append(0)
             self.tally[-1] += 1
 
             if self.state == 6:
-                res = self.evaluate_state()
+                res = self.evaluate_state(leniency)
                 self.pop_state()
                 return res
             return None
 
-        if self.state in [1, 3, 5] and black:
+        if self.state in [1, 3, 5] and active:
             self.tally[-1] += 1
-        if self.state in [2, 4] and not black:
+        if self.state in [2, 4] and not active:
             self.tally[-1] += 1
         return None
 
@@ -117,8 +117,8 @@ class CimbarScanner:
         # for each column, look for the 1:1:3:1:1 pattern
         state = ScanState()
         for x in range(self.width):
-            black = self._test_pixel(x, y)
-            res = state.process(black)
+            active = self._test_pixel(x, y)
+            res = state.process(active)
             if res:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
                 yield Anchor(x=x-res, xmax=x-1, y=y)
@@ -132,8 +132,8 @@ class CimbarScanner:
     def vertical_scan(self, x):
         state = ScanState()
         for y in range(self.height):
-            black = self._test_pixel(x, y)
-            res = state.process(black)
+            active = self._test_pixel(x, y)
+            res = state.process(active)
             if res:
                 #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
                 yield Anchor(x=x, y=y-res, ymax=y-1)
@@ -154,15 +154,15 @@ class CimbarScanner:
             start_x = offset
             start_y = 0
 
-        #print(f'scanning from {start_x}, {start_y} for {x},{y}')
+        # print(f'scanning from {start_x}, {start_y} for {x},{y}')
 
         state = ScanState()
         x = start_x
         y = start_y
         while x < self.width and y < self.height:
-            black = self._test_pixel(x, y)
-            # print(f'{x},{y} == {black}')
-            res = state.process(black)
+            active = self._test_pixel(x, y)
+            # print(f'{x},{y} == {active}')
+            res = state.process(active, leniency=2.0)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
                 yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
