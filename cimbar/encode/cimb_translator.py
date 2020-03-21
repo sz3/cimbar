@@ -3,12 +3,12 @@ from PIL import Image
 
 
 class CimbTranslator:
-    def __init__(self, dark):
+    def __init__(self, dark, bits):
         self.dark = dark
         self.hashes = {}
         self.img = {}
-        for i in range(32):
-            name = f'bitmap/{i:02x}.png'
+        for i in range(2 ** bits):
+            name = f'bitmap/{bits}/{i:02x}.png'
             self.img[i] = self._load_img(name)
             ahash = imagehash.average_hash(self.img[i])
             self.hashes[i] = ahash

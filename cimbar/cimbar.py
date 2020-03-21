@@ -67,7 +67,7 @@ def decode_iter(src_image, dark, deskew):
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
-    ct = CimbTranslator(dark)
+    ct = CimbTranslator(dark, bits=BITS_PER_OP)
 
     drift = cell_drift()
     for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
@@ -108,7 +108,7 @@ def encode_iter(src_data):
 
 def encode(src_data, dst_image, dark=False):
     img = _get_image_template(1024, dark)
-    ct = CimbTranslator(dark)
+    ct = CimbTranslator(dark, bits=BITS_PER_OP)
     for bits, x, y in encode_iter(src_data):
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
