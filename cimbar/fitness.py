@@ -23,7 +23,7 @@ def evaluate(src_file, dst_image, dark, deskew):
             troublemaker_tiles[expected_bits] += 1
 
     print('final result:')
-    s = {k: v for k, v in sorted(troublemaker_tiles.items(), key=lambda item: item[1])}
+    s = {f'{k:02x}': v for k, v in sorted(troublemaker_tiles.items(), key=lambda item: item[1])}
     print(s)
 
 
