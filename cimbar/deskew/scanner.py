@@ -233,19 +233,19 @@ class CimbarScanner:
             for p in c:
                 area.merge(p)
             average.append(area)
-        return average
+        return self.filter_candidates(average)
 
     def filter_candidates(self, candidates):
         if len(candidates) <= 4:
             return candidates
 
         candidates.sort(key=lambda c: c.xrange + c.yrange)
-        candidates = candidates[-4:]
+        best_candidates = candidates[-4:]
 
-        xrange = sum([c.xrange for c in candidates])
-        yrange = sum([c.yrange for c in candidates])
-        xrange = xrange // len(candidates)
-        yrange = yrange // len(candidates)
+        xrange = sum([c.xrange for c in best_candidates])
+        yrange = sum([c.yrange for c in best_candidates])
+        xrange = xrange // len(best_candidates)
+        yrange = yrange // len(best_candidates)
 
         return [c for c in candidates if c.xrange > xrange / 2 and c.yrange > yrange / 2]
 
@@ -271,5 +271,4 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-        final_candidates = self.filter_candidates(t3_candidates)
-        return self.sort_top_to_bottom(final_candidates)
+        return self.sort_top_to_bottom(t3_candidates)
