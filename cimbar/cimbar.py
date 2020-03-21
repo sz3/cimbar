@@ -99,15 +99,19 @@ def _get_image_template(width, dark):
     return img
 
 
-def encode(src_data, dst_image, dark=False):
-    img = _get_image_template(1024, dark)
-    ct = CimbTranslator(dark)
-
+def encode_iter(src_data):
     with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
             bits = f.read()
-            encoded = ct.encode(bits)
-            img.paste(encoded, (x, y))
+            yield bits, x, y
+
+
+def encode(src_data, dst_image, dark=False):
+    img = _get_image_template(1024, dark)
+    ct = CimbTranslator(dark)
+    for bits, x, y in encode_iter(src_data):
+        encoded = ct.encode(bits)
+        img.paste(encoded, (x, y))
     img.save(dst_image)
 
 
