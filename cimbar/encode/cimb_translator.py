@@ -72,7 +72,7 @@ class cell_drift:
             self.y = 0-self.limit
 
 
-def cell_positions(spacing, dimensions, marker_size=8):
+def cell_positions(spacing, dimensions, marker_size=6):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112

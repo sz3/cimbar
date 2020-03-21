@@ -62,12 +62,12 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < leniency or ratio > 3.5:
+            if ratio < leniency or ratio > 5.0:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
 
-    def process(self, active, leniency=2.5):
+    def process(self, active, leniency=3.0):
         # transitions first
         is_transition = (self.state in [0, 2, 4] and active) or (self.state in [1, 3, 5] and not active)
         if is_transition:
@@ -91,7 +91,9 @@ class ScanState:
 def _the_works(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img,(17,17),0)
-    _, img = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
+    img = clahe.apply(img)
+    _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
     return img
 
 
@@ -143,25 +145,29 @@ class CimbarScanner:
             y = self.height
             yield Anchor(x=x, y=y-res, ymax=y-1)
 
-    def diagonal_scan(self, x, y):
+    def diagonal_scan(self, target_x, target_y):
         # find top/left point first, then go down right
-        offset = abs(x - y)
-        if x < y:
+        offset = abs(target_x - target_y)
+        if target_x < target_y:
             start_y = offset
             start_x = 0
         else:
             start_x = offset
             start_y = 0
 
-        # print(f'scanning from {start_x}, {start_y} for {x},{y}')
+        #if (target_x, target_y) == (2524, 803):
+        #    print(f'scanning from {start_x}, {start_y} for {target_x},{target_y}')
 
         state = ScanState()
         x = start_x
         y = start_y
         while x < self.width and y < self.height:
             active = self._test_pixel(x, y)
-            # print(f'{x},{y} == {active}')
-            res = state.process(active, leniency=2.0)
+            #if (start_x, start_y) == (1721, 0):
+            #    print(f'{x},{y} == {active}')
+            #if (x, y) == (2587,866):
+            #    print(f'{state.tally}')
+            res = state.process(active, leniency=3.0)
             if res:
                 print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
                 yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
