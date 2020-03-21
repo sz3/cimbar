@@ -91,7 +91,7 @@ class ScanState:
 def _the_works(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img,(17,17),0)
-    __,img = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    _, img = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
     return img
 
 
@@ -100,8 +100,7 @@ class CimbarScanner:
         '''
         image dimensions need to not be divisible by skip
         '''
-        self.img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, self.img = cv2.threshold(self.img, 127, 255, cv2.THRESH_BINARY)
+        self.img = _the_works(img)
         self.height, self.width = self.img.shape
         self.dark = dark
         self.skip = skip
@@ -233,12 +232,16 @@ class CimbarScanner:
     def filter_candidates(self, candidates):
         if len(candidates) <= 4:
             return candidates
+
+        candidates.sort(key=lambda c: c.xrange + c.yrange)
+        candidates = candidates[-4:]
+
         xrange = sum([c.xrange for c in candidates])
         yrange = sum([c.yrange for c in candidates])
-
         xrange = xrange // len(candidates)
         yrange = yrange // len(candidates)
-        return [c for c in candidates if c.xrange > xrange // 2 and c.yrange > yrange // 2]
+
+        return [c for c in candidates if c.xrange > xrange / 2 and c.yrange > yrange / 2]
 
 
     def sort_top_to_bottom(self, candidates):

@@ -31,7 +31,7 @@ from cimbar.encode.cimb_translator import CimbTranslator, cell_drift, cell_posit
 from cimbar.util.bit_file import bit_file
 
 
-BITS_PER_OP = 5
+BITS_PER_OP = 4
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 113
