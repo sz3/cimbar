@@ -62,7 +62,7 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < leniency or ratio > 5.0:
+            if ratio < leniency or ratio > 5.5:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
@@ -155,7 +155,7 @@ class CimbarScanner:
             start_x = offset
             start_y = 0
 
-        #if (target_x, target_y) == (2524, 803):
+        #if (target_x, target_y) == (346, 3005):
         #    print(f'scanning from {start_x}, {start_y} for {target_x},{target_y}')
 
         state = ScanState()
@@ -163,9 +163,9 @@ class CimbarScanner:
         y = start_y
         while x < self.width and y < self.height:
             active = self._test_pixel(x, y)
-            #if (start_x, start_y) == (1721, 0):
+            #if (target_x, target_y) == (346, 3005):
             #    print(f'{x},{y} == {active}')
-            #if (x, y) == (2587,866):
+            #if (x, y) == (394,3053):
             #    print(f'{state.tally}')
             res = state.process(active, leniency=3.0)
             if res:
