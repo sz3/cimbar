@@ -1,4 +1,5 @@
 import random
+import sys
 import time
 from os import makedirs, path
 
@@ -13,8 +14,8 @@ def _path(seed):
 
 
 def _image_template(tile_size=8):
-    color = (255, 255, 255)
-    img = Image.new('RGB', (tile_size, tile_size), color=color)
+    color = (255, 255, 255, 255)
+    img = Image.new('RGBA', (tile_size, tile_size), color=color)
     return img
 
 
@@ -32,7 +33,7 @@ def generate_tile(tile_size):
         x = i % tile_size
         y = i // tile_size
         if b:
-            pixels[x, y] = (0, 255, 255)
+            pixels[x, y] = (0, 255, 255, 255)
     return img
 
 
@@ -61,6 +62,14 @@ def generate_tileset(seed, num_tiles=16):
 
 
 def main():
+    try:
+        input_seed = sys.argv[1]
+    except IndexError:
+        pass
+    if input_seed:
+        generate_tileset(input_seed)
+        return
+
     random.seed()
     for run in range(5):
         tileset_seed = random.getrandbits(128)
