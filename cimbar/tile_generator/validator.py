@@ -21,7 +21,7 @@ class ImageCompare:
         return True
 
     def hash_fun(self, img):
-        return imagehash.average_hash(img, 4)
+        return imagehash.average_hash(img, 6)
 
     def add(self, new_tile):
         thash = self.process(new_tile)
@@ -32,14 +32,14 @@ class ImageCompare:
 
 
 class AverageHash(ImageCompare):
-    hash_dist = 8
+    hash_dist = 14
 
     def process(self, new_tile):
         return self.hash_fun(new_tile)
 
 
 class BlurryHash(ImageCompare):
-    hash_dist = 7
+    hash_dist = 12
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.SMOOTH)
@@ -47,7 +47,7 @@ class BlurryHash(ImageCompare):
 
 
 class VeryBlurryHash(ImageCompare):
-    hash_dist = 7
+    hash_dist = 12
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.BoxBlur(1))
@@ -55,7 +55,7 @@ class VeryBlurryHash(ImageCompare):
 
 
 class DownSizeHash(ImageCompare):
-    hash_dist = 8
+    hash_dist = 14
 
     def __init__(self, size, **kwargs):
         super().__init__(**kwargs)
@@ -67,7 +67,7 @@ class DownSizeHash(ImageCompare):
 
 
 class OffsetHash(ImageCompare):
-    hash_dist = 6
+    hash_dist = 10
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -85,7 +85,7 @@ class OffsetHash(ImageCompare):
 
 
 class CropHash(ImageCompare):
-    hash_dist = 6
+    hash_dist = 10
 
     def process(self, new_tile):
         img = ImageOps.crop(new_tile, border=1)
