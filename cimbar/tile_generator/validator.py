@@ -19,6 +19,9 @@ class ImageCompare:
                 return False
         return True
 
+    def hash_fun(self, img):
+        return imagehash.average_hash(img)
+
     def add(self, new_tile):
         thash = self.process(new_tile)
         self.hashes.add(thash)
@@ -29,7 +32,7 @@ class ImageCompare:
 
 class AverageHash(ImageCompare):
     def process(self, new_tile):
-        return imagehash.average_hash(new_tile)
+        return self.hash_fun(new_tile)
 
 
 class BlurryHash(ImageCompare):
@@ -37,7 +40,7 @@ class BlurryHash(ImageCompare):
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.SMOOTH)
-        return imagehash.average_hash(blurred)
+        return self.hash_fun(blurred)
 
 
 class VeryBlurryHash(ImageCompare):
@@ -45,11 +48,11 @@ class VeryBlurryHash(ImageCompare):
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.BoxBlur(1))
-        return imagehash.average_hash(blurred)
+        return self.hash_fun(blurred)
 
 
 class DownSizeHash(ImageCompare):
-    hash_dist = 30
+    hash_dist = 25
 
     def __init__(self, size, **kwargs):
         super().__init__(**kwargs)
@@ -57,7 +60,7 @@ class DownSizeHash(ImageCompare):
 
     def process(self, new_tile):
         img = new_tile.resize((self.size, self.size))
-        return imagehash.average_hash(img)
+        return self.hash_fun(img)
 
 
 class OffsetHash(ImageCompare):
@@ -70,7 +73,7 @@ class OffsetHash(ImageCompare):
 
     def process(self, new_tile):
         off = ImageChops.offset(new_tile, self.x, self.y)
-        return imagehash.average_hash(off)
+        return self.hash_fun(off)
 
 
 class Validator:

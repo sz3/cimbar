@@ -43,15 +43,21 @@ def generate_tileset(seed, num_tiles=16):
     makedirs(dir_path, exist_ok=True)
 
     v = Validator()
+    count = 0
     for t in range(num_tiles):
+        tile_path = path.join(dir_path, f'{t:02x}.png')
+        if path.exists(tile_path):
+            print('skipping {}; already exists'.format(tile_path))
+            continue
+
         while True:
             img = generate_tile(8)
+            count += 1
             if v.add_if_valid(img):
                 break
-        tile_path = path.join(dir_path, f'{t:02x}.png')
         img.save(tile_path)
 
-    print("--- {} seconds for {} ---".format(time.time() - start_time, seed))
+    print("--- {} seconds for {} --- Needed {} iterations.".format(time.time() - start_time, seed, count))
 
 
 def main():
