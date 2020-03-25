@@ -1,4 +1,5 @@
 import random
+import time
 from os import makedirs, path
 
 from bitstring import BitStream
@@ -36,6 +37,7 @@ def generate_tile(tile_size):
 
 
 def generate_tileset(seed, num_tiles=16):
+    start_time = time.time()
     random.seed(seed)
     dir_path = _path(seed)
     makedirs(dir_path, exist_ok=True)
@@ -48,6 +50,8 @@ def generate_tileset(seed, num_tiles=16):
                 break
         tile_path = path.join(dir_path, f'{t:02x}.png')
         img.save(tile_path)
+
+    print("--- {} seconds for {} ---".format(time.time() - start_time, seed))
 
 
 def main():

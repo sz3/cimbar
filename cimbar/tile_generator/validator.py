@@ -1,5 +1,5 @@
 import imagehash
-from PIL import ImageFilter
+from PIL import ImageFilter, ImageChops
 
 
 class ImageCompare:
@@ -33,6 +33,14 @@ class AverageHash(ImageCompare):
 
 
 class BlurryHash(ImageCompare):
+    hash_dist = 30
+
+    def process(self, new_tile):
+        blurred = new_tile.filter(ImageFilter.SMOOTH)
+        return imagehash.average_hash(blurred)
+
+
+class VeryBlurryHash(ImageCompare):
     hash_dist = 25
 
     def process(self, new_tile):
@@ -40,9 +48,44 @@ class BlurryHash(ImageCompare):
         return imagehash.average_hash(blurred)
 
 
+class DownSizeHash(ImageCompare):
+    hash_dist = 30
+
+    def __init__(self, size, **kwargs):
+        super().__init__(**kwargs)
+        self.size = size
+
+    def process(self, new_tile):
+        img = new_tile.resize((self.size, self.size))
+        return imagehash.average_hash(img)
+
+
+class OffsetHash(ImageCompare):
+    hash_dist = 30
+
+    def __init__(self, x=1, y=1, **kwargs):
+        super().__init__(**kwargs)
+        self.x = x
+        self.y = y
+
+    def process(self, new_tile):
+        off = ImageChops.offset(new_tile, self.x, self.y)
+        return imagehash.average_hash(off)
+
+
 class Validator:
     def __init__(self):
-        self.hashers = [AverageHash(), BlurryHash()]
+        self.hashers = [
+            AverageHash(),
+            DownSizeHash(6),
+            DownSizeHash(4),
+            BlurryHash(),
+            VeryBlurryHash(),
+            OffsetHash(1, 1),
+            OffsetHash(1, -1),
+            OffsetHash(-1, 1),
+            OffsetHash(-1, -1),
+        ]
 
     def add_if_valid(self, new_tile):
         for h in self.hashers:
