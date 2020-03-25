@@ -3,8 +3,6 @@ from PIL import ImageFilter, ImageChops, ImageDraw, ImageOps
 
 
 class ImageCompare:
-    hash_dist = 30
-
     def __init__(self):
         self.hashes = set()
 
@@ -13,7 +11,10 @@ class ImageCompare:
         return len(self.hashes)
 
     def is_valid(self, new_tile):
+        base_hash = self.hash_fun(new_tile)
         thash = self.process(new_tile)
+        if base_hash - thash > 5:
+            return False
         for h in self.hashes:
             if h - thash < self.hash_dist:
                 return False
@@ -31,6 +32,8 @@ class ImageCompare:
 
 
 class AverageHash(ImageCompare):
+    hash_dist = 30
+
     def process(self, new_tile):
         return self.hash_fun(new_tile)
 
@@ -64,7 +67,7 @@ class DownSizeHash(ImageCompare):
 
 
 class OffsetHash(ImageCompare):
-    hash_dist = 25
+    hash_dist = 20
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -93,22 +96,25 @@ class Validator:
     def __init__(self):
         self.hashers = [
             AverageHash(),
+            BlurryHash(),
+            VeryBlurryHash(),
             CropHash(),
             DownSizeHash(6),
             DownSizeHash(4),
-            BlurryHash(),
-            VeryBlurryHash(),
             OffsetHash(1, 1),
             OffsetHash(1, -1),
             OffsetHash(-1, 1),
             OffsetHash(-1, -1),
         ]
 
+    def add(self, new_tile):
+        for h in self.hashers:
+            h.add(new_tile)
+
     def add_if_valid(self, new_tile):
         for h in self.hashers:
             if not h.is_valid(new_tile):
                 return False
 
-        for h in self.hashers:
-            h.add(new_tile)
+        self.add(new_tile)
         return True
