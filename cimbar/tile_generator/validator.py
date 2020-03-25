@@ -1,5 +1,5 @@
 import imagehash
-from PIL import ImageFilter, ImageChops
+from PIL import ImageFilter, ImageChops, ImageDraw, ImageOps
 
 
 class ImageCompare:
@@ -64,7 +64,7 @@ class DownSizeHash(ImageCompare):
 
 
 class OffsetHash(ImageCompare):
-    hash_dist = 30
+    hash_dist = 25
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -73,13 +73,27 @@ class OffsetHash(ImageCompare):
 
     def process(self, new_tile):
         off = ImageChops.offset(new_tile, self.x, self.y)
+        xline = (0,0) + (0,8) if self.x > 0 else (7,0) + (7,8)
+        yline = (0,0) + (8,0) if self.y > 0 else (0,7) + (8,7)
+        od = ImageDraw.Draw(off)
+        od.line(xline, fill=255)
+        od.line(yline, fill=255)
         return self.hash_fun(off)
+
+
+class CropHash(ImageCompare):
+    hash_dist = 25
+
+    def process(self, new_tile):
+        img = ImageOps.crop(new_tile, border=1)
+        return self.hash_fun(img)
 
 
 class Validator:
     def __init__(self):
         self.hashers = [
             AverageHash(),
+            CropHash(),
             DownSizeHash(6),
             DownSizeHash(4),
             BlurryHash(),

@@ -57,11 +57,13 @@ def generate_tileset(seed, num_tiles=16):
             if v.add_if_valid(img):
                 break
         img.save(tile_path)
+        print('*** saved {} at {} -- {} iterations'.format(tile_path, time.time() - start_time, count))
 
     print("--- {} seconds for {} --- Needed {} iterations.".format(time.time() - start_time, seed, count))
 
 
 def main():
+    input_seed = None
     try:
         input_seed = sys.argv[1]
     except IndexError:
