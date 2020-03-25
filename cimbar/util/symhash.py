@@ -21,19 +21,21 @@ class SymbolicHash:
             binary_array = binary_array.hash
 
         self.dim = dim
-        self.center = self._image_hash_slice(binary_array, (1, 1), (dim-1, dim-1))
+        self.center = self._imagehash_slice(binary_array, (1, 1), (dim-1, dim-1))
 
         symbol_dim = dim - 2
         corners = [
-            (0, 0), (symbol_dim, symbol_dim),
-            (0, 2), (symbol_dim, dim),
-            (2, 0), (dim, symbol_dim),
-            (2, 2), (dim, dim),
+            [(0, 0), (symbol_dim, symbol_dim)],
+            [(0, 2), (symbol_dim, dim)],
+            [(2, 0), (dim, symbol_dim)],
+            [(2, 2), (dim, dim)],
         ]
-        self.corners = [self._image_hash_slice(binary_array, *c) for c in corners]
+        self.corners = [self._imagehash_slice(binary_array, *c) for c in corners]
 
-    def _image_hash_slice(self, binary_array, start, end):
-        res = matrix_slice(binary_array, self.dim, start, end)
+    def _imagehash_slice(self, binary_array, start, end):
+        startX, startY = start
+        endX, endY = end
+        res = binary_array[startX:endX, startY:endY]
         return imagehash.ImageHash(res)
 
     def __eq__(self, other):
