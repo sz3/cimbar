@@ -13,7 +13,7 @@ class ImageCompare:
     def is_valid(self, new_tile):
         base_hash = self.hash_fun(new_tile)
         thash = self.process(new_tile)
-        if base_hash - thash > 5:
+        if base_hash - thash > 4:
             return False
         for h in self.hashes:
             if h - thash < self.hash_dist:
@@ -21,7 +21,7 @@ class ImageCompare:
         return True
 
     def hash_fun(self, img):
-        return imagehash.average_hash(img)
+        return imagehash.average_hash(img, 4)
 
     def add(self, new_tile):
         thash = self.process(new_tile)
@@ -32,14 +32,14 @@ class ImageCompare:
 
 
 class AverageHash(ImageCompare):
-    hash_dist = 30
+    hash_dist = 8
 
     def process(self, new_tile):
         return self.hash_fun(new_tile)
 
 
 class BlurryHash(ImageCompare):
-    hash_dist = 30
+    hash_dist = 7
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.SMOOTH)
@@ -47,7 +47,7 @@ class BlurryHash(ImageCompare):
 
 
 class VeryBlurryHash(ImageCompare):
-    hash_dist = 25
+    hash_dist = 7
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.BoxBlur(1))
@@ -55,7 +55,7 @@ class VeryBlurryHash(ImageCompare):
 
 
 class DownSizeHash(ImageCompare):
-    hash_dist = 25
+    hash_dist = 8
 
     def __init__(self, size, **kwargs):
         super().__init__(**kwargs)
@@ -67,7 +67,7 @@ class DownSizeHash(ImageCompare):
 
 
 class OffsetHash(ImageCompare):
-    hash_dist = 20
+    hash_dist = 6
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -85,7 +85,7 @@ class OffsetHash(ImageCompare):
 
 
 class CropHash(ImageCompare):
-    hash_dist = 25
+    hash_dist = 6
 
     def process(self, new_tile):
         img = ImageOps.crop(new_tile, border=1)
@@ -99,12 +99,6 @@ class Validator:
             BlurryHash(),
             VeryBlurryHash(),
             CropHash(),
-            DownSizeHash(6),
-            DownSizeHash(4),
-            OffsetHash(1, 1),
-            OffsetHash(1, -1),
-            OffsetHash(-1, 1),
-            OffsetHash(-1, -1),
         ]
 
     def add(self, new_tile):
