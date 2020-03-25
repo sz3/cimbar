@@ -50,7 +50,9 @@ def generate_tileset(seed, num_tiles=16):
         if path.exists(tile_path):
             print('skipping {}; already exists'.format(tile_path))
             img = Image.open(tile_path)
-            v.add(img)
+            if not v.add_if_valid(img):
+                print('abort: {} is not a viable tile!'.format(tile_path))
+                return
             continue
 
         while True:

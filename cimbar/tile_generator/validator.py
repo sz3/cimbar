@@ -3,6 +3,8 @@ from PIL import ImageFilter, ImageChops, ImageDraw, ImageOps
 
 
 class ImageCompare:
+    lenience = 4
+
     def __init__(self):
         self.hashes = set()
 
@@ -13,7 +15,7 @@ class ImageCompare:
     def is_valid(self, new_tile):
         base_hash = self.hash_fun(new_tile)
         thash = self.process(new_tile)
-        if base_hash - thash > 4:
+        if base_hash - thash > self.lenience:
             return False
         for h in self.hashes:
             if h - thash < self.hash_dist:
@@ -68,6 +70,7 @@ class DownSizeHash(ImageCompare):
 
 class OffsetHash(ImageCompare):
     hash_dist = 10
+    lenience = 9
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -76,11 +79,14 @@ class OffsetHash(ImageCompare):
 
     def process(self, new_tile):
         off = ImageChops.offset(new_tile, self.x, self.y)
-        xline = (0,0) + (0,8) if self.x > 0 else (7,0) + (7,8)
-        yline = (0,0) + (8,0) if self.y > 0 else (0,7) + (8,7)
         od = ImageDraw.Draw(off)
-        od.line(xline, fill=255)
-        od.line(yline, fill=255)
+        if self.x != 0:
+            xline = (0,0) + (0,8) if self.x > 0 else (7,0) + (7,8)
+            od.line(xline, fill=(255, 255, 255, 255))
+        if self.y != 0:
+            yline = (0,0) + (8,0) if self.y > 0 else (0,7) + (8,7)
+            od.line(yline, fill=(255, 255, 255, 255))
+        off = off.filter(ImageFilter.BoxBlur(1))
         return self.hash_fun(off)
 
 
@@ -99,6 +105,8 @@ class Validator:
             BlurryHash(),
             VeryBlurryHash(),
             CropHash(),
+            OffsetHash(0, 1),
+            OffsetHash(0, -1),
         ]
 
     def add(self, new_tile):
