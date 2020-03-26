@@ -1,9 +1,9 @@
-import imagehash
+from cimbar.util.symhash import symhash
 from PIL import ImageFilter, ImageChops, ImageDraw, ImageOps
 
 
 class ImageCompare:
-    lenience = 4
+    lenience = 1
 
     def __init__(self):
         self.hashes = set()
@@ -16,14 +16,16 @@ class ImageCompare:
         base_hash = self.hash_fun(new_tile)
         thash = self.process(new_tile)
         if base_hash - thash > self.lenience:
+            #print(f'rejected! {self.__class__} -> {base_hash - thash}')
             return False
         for h in self.hashes:
             if h - thash < self.hash_dist:
+                #print(f'too close! {self.__class__} -> {h - thash}')
                 return False
         return True
 
     def hash_fun(self, img):
-        return imagehash.average_hash(img, 6)
+        return symhash(img)
 
     def add(self, new_tile):
         thash = self.process(new_tile)
@@ -33,15 +35,16 @@ class ImageCompare:
         raise NotImplementedError()
 
 
-class AverageHash(ImageCompare):
-    hash_dist = 14
+class SimpleHash(ImageCompare):
+    hash_dist = 10
 
     def process(self, new_tile):
         return self.hash_fun(new_tile)
 
 
 class BlurryHash(ImageCompare):
-    hash_dist = 12
+    hash_dist = 10
+    lenience = 3
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.SMOOTH)
@@ -49,7 +52,8 @@ class BlurryHash(ImageCompare):
 
 
 class VeryBlurryHash(ImageCompare):
-    hash_dist = 12
+    hash_dist = 10
+    lenience = 4
 
     def process(self, new_tile):
         blurred = new_tile.filter(ImageFilter.BoxBlur(1))
@@ -57,7 +61,7 @@ class VeryBlurryHash(ImageCompare):
 
 
 class DownSizeHash(ImageCompare):
-    hash_dist = 14
+    hash_dist = 10
 
     def __init__(self, size, **kwargs):
         super().__init__(**kwargs)
@@ -70,7 +74,7 @@ class DownSizeHash(ImageCompare):
 
 class OffsetHash(ImageCompare):
     hash_dist = 10
-    lenience = 9
+    lenience = 5
 
     def __init__(self, x=1, y=1, **kwargs):
         super().__init__(**kwargs)
@@ -86,7 +90,6 @@ class OffsetHash(ImageCompare):
         if self.y != 0:
             yline = (0,0) + (8,0) if self.y > 0 else (0,7) + (8,7)
             od.line(yline, fill=(255, 255, 255, 255))
-        off = off.filter(ImageFilter.BoxBlur(1))
         return self.hash_fun(off)
 
 
@@ -101,12 +104,11 @@ class CropHash(ImageCompare):
 class Validator:
     def __init__(self):
         self.hashers = [
-            AverageHash(),
+            SimpleHash(),
             BlurryHash(),
             VeryBlurryHash(),
-            CropHash(),
-            OffsetHash(0, 1),
-            OffsetHash(0, -1),
+            OffsetHash(1, 1),
+            OffsetHash(-1, -1),
         ]
 
     def add(self, new_tile):
