@@ -36,7 +36,7 @@ class ImageCompare:
 
 
 class SimpleHash(ImageCompare):
-    hash_dist = 10
+    hash_dist = 12
 
     def process(self, new_tile):
         return self.hash_fun(new_tile)

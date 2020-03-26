@@ -1,4 +1,4 @@
-import imagehash
+from cimbar.util.symhash import symhash
 from PIL import Image
 
 
@@ -10,7 +10,7 @@ class CimbTranslator:
         for i in range(2 ** bits):
             name = f'bitmap/{bits}/{i:02x}.png'
             self.img[i] = self._load_img(name)
-            ahash = imagehash.average_hash(self.img[i], 6)
+            ahash = symhash(self.img[i])
             self.hashes[i] = ahash
 
     def _load_img(self, name):
@@ -41,7 +41,7 @@ class CimbTranslator:
         return best_fit, min_distance
 
     def decode(self, img_cell):
-        cell_hash = imagehash.average_hash(img_cell, 6)
+        cell_hash = symhash(img_cell)
         return self.get_best_fit(cell_hash)
 
     def encode(self, bits):
