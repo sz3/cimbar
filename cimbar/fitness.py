@@ -25,7 +25,7 @@ def evaluate(src_file, dst_image, dark, deskew):
         results[expected_bits] = r
 
     print('final result:')
-    s = {f'{k:02x}': v for k, v in sorted(results.items(), key=lambda item: item[1][0])}
+    s = {f'{k:02x}': v for k, v in sorted(results.items(), key=lambda item: item[1][0] / item[1][1])}
     print(s)
 
 
