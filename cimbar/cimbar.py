@@ -91,13 +91,24 @@ def decode(src_image, outfile, dark=False, deskew=True):
 def _get_image_template(width, dark):
     color = (0, 0, 0) if dark else (255, 255, 255)
     img = Image.new('RGB', (width, width), color=color)
-    anchor_src = 'bitmap/anchor-dark.png' if dark else 'bitmap/anchor-light.png'
-    anchor = Image.open(anchor_src)
+
+    suffix = 'dark' if dark else 'light'
+    anchor = Image.open(f'bitmap/anchor-{suffix}.png')
     aw, ah = anchor.size
     img.paste(anchor, (0, 0))
     img.paste(anchor, (0, width-ah))
     img.paste(anchor, (width-aw, 0))
     img.paste(anchor, (width-aw, width-ah))
+
+    horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
+    gw, _ = horizontal_guide.size
+    img.paste(horizontal_guide, (width//2 - gw//2, 3))
+    img.paste(horizontal_guide, (width//2 - gw//2, width-5))
+
+    vertical_guide = Image.open(f'bitmap/guide-vertical-{suffix}.png')
+    _, gh = vertical_guide.size
+    img.paste(vertical_guide, (3, width//2 - gw//2))
+    img.paste(vertical_guide, (width-5, width//2 - gw//2))
     return img
 
 

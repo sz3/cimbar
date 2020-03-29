@@ -30,7 +30,7 @@ def deskewer(src_image, dst_image, dark):
 
     from cimbar.cimbar import TOTAL_SIZE
     size = TOTAL_SIZE
-    anchor_size = 26
+    anchor_size = 30
     input_pts = numpy.float32([top_left, top_right, bottom_right, bottom_left])
     output_pts = numpy.float32([
         [anchor_size, anchor_size], [size-anchor_size, anchor_size],
