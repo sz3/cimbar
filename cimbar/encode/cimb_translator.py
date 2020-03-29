@@ -72,7 +72,7 @@ class cell_drift:
             self.y = 0-self.limit
 
 
-def cell_positions(spacing, dimensions, marker_size=6):
+def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112
@@ -84,26 +84,27 @@ def cell_positions(spacing, dimensions, marker_size=6):
     112 * 8
     '''
     #cells = dimensions * dimensions
+    offset_y = offset + 1
     marker_offset_x = spacing * marker_size
     top_width = dimensions - marker_size - marker_size
     top_cells = top_width * marker_size
     for i in range(top_cells):
-        x = (i % top_width) * spacing + marker_offset_x
-        y = (i // top_width) * spacing
+        x = (i % top_width) * spacing + marker_offset_x + offset
+        y = (i // top_width) * spacing + offset_y
         yield x, y
 
     mid_y = marker_size * spacing
     mid_width = dimensions
     mid_cells = mid_width * top_width  # top_width is also "mid_height"
     for i in range(mid_cells):
-        x = (i % mid_width) * spacing
-        y = (i // mid_width) * spacing + mid_y
+        x = (i % mid_width) * spacing + offset
+        y = (i // mid_width) * spacing + mid_y + offset_y
         yield x, y
 
     bottom_y = (dimensions - marker_size) * spacing
     bottom_width = top_width
     bottom_cells = bottom_width * marker_size
     for i in range(bottom_cells):
-        x = (i % bottom_width) * spacing + marker_offset_x
-        y = (i // bottom_width) * spacing + bottom_y
+        x = (i % bottom_width) * spacing + marker_offset_x + offset
+        y = (i // bottom_width) * spacing + bottom_y + offset_y
         yield x, y

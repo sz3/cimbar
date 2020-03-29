@@ -31,11 +31,12 @@ from cimbar.encode.cimb_translator import CimbTranslator, cell_drift, cell_posit
 from cimbar.util.bit_file import bit_file
 
 
-TOTAL_SIZE = 1008
+TOTAL_SIZE = 1024
 BITS_PER_OP = 4
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
+CELLS_OFFSET = 8
 
 
 def detect_and_deskew(src_image, temp_image, dark):
@@ -71,7 +72,7 @@ def decode_iter(src_image, dark, deskew):
     ct = CimbTranslator(dark, bits=BITS_PER_OP)
 
     drift = cell_drift()
-    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
+    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
         best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
         drift.update(best_dx, best_dy)
         yield best_bits
@@ -102,7 +103,7 @@ def _get_image_template(width, dark):
 
 def encode_iter(src_data):
     with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
-        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
+        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
             bits = f.read()
             yield bits, x, y
 
