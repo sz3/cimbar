@@ -15,15 +15,21 @@ class CimbTranslator:
 
     def _load_img(self, name):
         img = Image.open(name)
-        if not self.dark:
-            return img
+        # replace by color...
+        replacements = {
+            # (0, 255, 255, 255): (255, 255, 0, 255),
+        }
+        if self.dark:
+            replacements[(255, 255, 255, 255)] = (0, 0, 0, 255)
 
         pixdata = img.load()
         width, height = img.size
         for y in range(height):
             for x in range(width):
-                if pixdata[x, y] == (255, 255, 255, 255):
-                    pixdata[x, y] = (0, 0, 0, 255)
+                for current_color, desired_color in replacements.items():
+                    if pixdata[x, y] == current_color:
+                        pixdata[x, y] = desired_color
+                        break
         return img
 
     def get_best_fit(self, cell_hash):
@@ -42,7 +48,7 @@ class CimbTranslator:
 
     def decode(self, img_cell):
         cell_hash = imagehash.average_hash(img_cell)
-        return self.get_best_fit(cell_hash)
+        return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
 
     def encode(self, bits):
         return self.img[bits]

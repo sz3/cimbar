@@ -1,4 +1,5 @@
 import cv2
+import numpy
 
 
 # should be thought of as a line, not an area
@@ -88,6 +89,34 @@ class ScanState:
         return None
 
 
+class EdgeScanState:
+    def __init__(self):
+        self.state = 0
+        self.tally = [0]
+
+    def pop_state(self):
+        self.state -= 2
+        self.tally = self.tally[2:]
+
+    def process(self, active):
+        is_transition = (self.state in [0] and active) or (self.state in [1] and not active)
+        if is_transition:
+            self.state += 1
+            self.tally.append(0)
+            self.tally[-1] += 1
+
+            if self.state == 2:
+                res = self.tally[1]
+                self.pop_state()
+                return res
+            return None
+        if self.state in [1] and active:
+            self.tally[-1] += 1
+        if self.state in [0] and not active:
+            self.tally[-1] += 1
+        return None
+
+
 def _the_works(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img,(17,17),0)
@@ -95,6 +124,15 @@ def _the_works(img):
     img = clahe.apply(img)
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
     return img
+
+
+class CimbarAlignment:
+    def __init__(self, four_corners):
+        self.four_corners = four_corners
+        self.top_left = four_corners[0]
+        self.top_right = four_corners[1]
+        self.bottom_left = four_corners[2]
+        self.bottom_right = four_corners[3]
 
 
 class CimbarScanner:
@@ -249,7 +287,6 @@ class CimbarScanner:
 
         return [c for c in candidates if c.xrange > xrange / 2 and c.yrange > yrange / 2]
 
-
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
         top_left = candidates[0]
@@ -271,4 +308,62 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-        return self.sort_top_to_bottom(t3_candidates)
+
+        align = CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
+        return align
+
+    def chase_edge(self, start, unit):
+        # test 4 points. If we get 2/4, success
+        success = 0
+        for i in [-2, -1, 1, 2]:
+            x = start[0] + int(unit[0] * i)
+            y = start[1] + int(unit[1] * i)
+            active = self._test_pixel(x, y)
+            print(f'testing at {x},{y} == {active}')
+            if active:
+                success += 1
+        return success >= 2
+
+    def find_edge(self, u, v, anchor_size):
+        # out is always 90 degrees left?
+        distance_v = numpy.subtract(v, u)
+        distance_unit = distance_v / 512
+        out_v = (distance_v[1] // 64, -distance_v[0] // 64)
+        print(f'edge {u} -> {v}, distance {distance_v}')
+
+        max_out = max(abs(out_v[0]), abs(out_v[1]))
+        out_unit = out_v / max_out
+        print(f'{out_unit} {max_out}')
+
+        mid_point_anchor_adjust = numpy.multiply(out_v, anchor_size / 16)
+        mid_point = numpy.add(u, distance_v / 2) + mid_point_anchor_adjust
+        print(f'out_v {out_v}, mid_point {mid_point}, anchor adjust: {mid_point_anchor_adjust}')
+
+        state = EdgeScanState()
+        i, j = 0, 0
+        while int(i) != out_v[0] and int(j) != out_v[1]:
+            x = int(mid_point[0] + i)
+            y = int(mid_point[1] + j)
+            active = self._test_pixel(x, y)
+            size = state.process(active)
+            if size:
+                print(f'found something at {x}, {y}. {i}, {j}. {size}')
+                edge = numpy.subtract((x, y), out_unit*2).astype(int)
+                if self.chase_edge(edge, distance_unit):
+                    return edge[0], edge[1]
+            i += out_unit[0]
+            j += out_unit[1]
+        return None
+
+    def scan_edges(self, align, anchor_size):
+        bounds = [
+            (align.top_left, align.top_right),
+            (align.top_right, align.bottom_right),
+            (align.bottom_right, align.bottom_left),
+            (align.bottom_left, align.top_left),
+        ]
+        edges = []
+        for start, end in bounds:
+            res = self.find_edge(start, end, anchor_size)
+            edges.append(res)
+        return edges

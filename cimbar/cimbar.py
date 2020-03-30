@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-"""color-iconographic-matrix barcode
+"""color-icon-matrix barcode
+or symbol-matrix barcode?
 
 Usage:
   ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--deskew] [--dark]
@@ -52,7 +53,7 @@ def _decode_cell(ct, img, x, y, drift):
         bits, min_distance = ct.decode(img_cell)
         best_distance = min(min_distance, best_distance)
         if min_distance == best_distance:
-            best_bits = bits
+            best_bits = bits  # + color bits?
             best_dx = dx
             best_dy = dy
         if min_distance < 8:
