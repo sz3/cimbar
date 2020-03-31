@@ -15,7 +15,7 @@ def evaluate(src_file, dst_image, dark, deskew):
     results = {}
 
     ei = encode_iter(src_file)
-    di = decode_iter(dst_image, dark, deskew, partial_deskew=True)
+    di = decode_iter(dst_image, dark, deskew, partial_deskew=False)
     for (expected_bits, x, y), actual_bits in zip(ei, di):
         r = results.get(expected_bits, [0,0])
         r[1] += 1
