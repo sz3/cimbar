@@ -1,36 +1,53 @@
+from os import path
+
 import imagehash
 from PIL import Image
 
 
-class CimbTranslator:
-    def __init__(self, dark, bits):
+CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
+
+
+POSSIBLE_COLORS = [
+    (0, 0, 0, 255),
+    (0, 255, 255, 255),
+    (255, 255, 0, 255),
+    (255, 0, 255, 255),
+    (0, 0, 255, 255),
+    (0, 255, 0, 255),
+    (255, 0, 0, 255),
+    (255, 127, 0, 255),
+]
+
+
+def load_tile(name, dark, replacements={}):
+    img = Image.open(name)
+    if dark:
+        replacements[(255, 255, 255, 255)] = (0, 0, 0, 255)
+
+    pixdata = img.load()
+    width, height = img.size
+    for y in range(height):
+        for x in range(width):
+            for current_color, desired_color in replacements.items():
+                if pixdata[x, y] == current_color:
+                    pixdata[x, y] = desired_color
+                    break
+    return img
+
+
+class CimbDecoder:
+    def __init__(self, dark, symbol_bits, color_bits=0):
         self.dark = dark
+        self.symbol_bits = symbol_bits
         self.hashes = {}
-        self.img = {}
-        for i in range(2 ** bits):
-            name = f'bitmap/{bits}/{i:02x}.png'
-            self.img[i] = self._load_img(name)
-            ahash = imagehash.average_hash(self.img[i])
+        self.colors = [
+            POSSIBLE_COLORS[c] for c in range(2 ** color_bits)
+        ]
+        for i in range(2 ** symbol_bits):
+            name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
+            img = load_tile(name, self.dark)
+            ahash = imagehash.average_hash(img)
             self.hashes[i] = ahash
-
-    def _load_img(self, name):
-        img = Image.open(name)
-        # replace by color...
-        replacements = {
-            # (0, 255, 255, 255): (255, 255, 0, 255),
-        }
-        if self.dark:
-            replacements[(255, 255, 255, 255)] = (0, 0, 0, 255)
-
-        pixdata = img.load()
-        width, height = img.size
-        for y in range(height):
-            for x in range(width):
-                for current_color, desired_color in replacements.items():
-                    if pixdata[x, y] == current_color:
-                        pixdata[x, y] = desired_color
-                        break
-        return img
 
     def get_best_fit(self, cell_hash):
         min_distance = 1000
@@ -46,9 +63,44 @@ class CimbTranslator:
         #    print(f'min distance is {min_distance}. best fit {best_fit}')
         return best_fit, min_distance
 
-    def decode(self, img_cell):
+    def decode_symbol(self, img_cell):
         cell_hash = imagehash.average_hash(img_cell)
         return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
+
+    def decode_color(self, img_cell):
+        if len(self.colors) <= 1:
+            return 0
+        candidates = {}
+        pixdata = img.load()
+        width, height = img_cell.size
+        for y in range(1, height - 1):
+            for x in range(1, width - 1):
+                r, g, b, _ = pixdata[x, y]
+        bits = 0
+        # left shift final result by `symbol_bits`
+        return bits << self.symbol_bits
+
+
+class CimbEncoder:
+    def __init__(self, dark, symbol_bits, color_bits=0):
+        self.img = {}
+        self.colors = {}
+
+        num_symbols = 2 ** symbol_bits
+        for c in range(2 ** color_bits):
+            color = POSSIBLE_COLORS[c]
+            for i in range(num_symbols):
+                name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
+                self.img[c * num_symbols + i] = self._load_img(name, dark, color)
+
+    def _load_img(self, name, dark, color):
+        # replace by color...
+        if dark and color == (0, 0, 0, 255):
+            color = (255, 255, 255, 255)
+        replacements = {
+            (0, 255, 255, 255): color,
+        }
+        return load_tile(name, dark, replacements)
 
     def encode(self, bits):
         return self.img[bits]

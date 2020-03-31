@@ -30,12 +30,14 @@ from docopt import docopt
 from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
-from cimbar.encode.cimb_translator import CimbTranslator, cell_drift, cell_positions
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, cell_drift, cell_positions
 from cimbar.util.bit_file import bit_file
 
 
 TOTAL_SIZE = 1024
-BITS_PER_OP = 4
+BITS_PER_SYMBOL = 4
+BITS_PER_COLOR = 2
+BITS_PER_OP = BITS_PER_SYMBOL + BITS_PER_COLOR
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
@@ -72,13 +74,14 @@ def decode_iter(src_image, dark, deskew, partial_deskew):
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
-    ct = CimbTranslator(dark, bits=BITS_PER_OP)
+    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
 
     drift = cell_drift()
     for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
         best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
         drift.update(best_dx, best_dy)
-        yield best_bits
+        color_bits = ct.decode_color(img)
+        yield best_bits + color_bits
 
     if tempdir:  # cleanup
         with tempdir:
@@ -124,7 +127,7 @@ def encode_iter(src_data):
 
 def encode(src_data, dst_image, dark=False):
     img = _get_image_template(TOTAL_SIZE, dark)
-    ct = CimbTranslator(dark, bits=BITS_PER_OP)
+    ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
     for bits, x, y in encode_iter(src_data):
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
