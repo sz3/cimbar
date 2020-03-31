@@ -1,6 +1,8 @@
 import cv2
 import numpy
 
+from cimbar.util.geometry import calculate_midpoints
+
 
 # should be thought of as a line, not an area
 class Anchor:
@@ -324,46 +326,51 @@ class CimbarScanner:
                 success += 1
         return success >= 2
 
-    def find_edge(self, u, v, anchor_size):
+    def find_edge(self, u, v, mid_point, anchor_size):
         # out is always 90 degrees left?
         distance_v = numpy.subtract(v, u)
         distance_unit = distance_v / 512
         out_v = (distance_v[1] // 64, -distance_v[0] // 64)
         print(f'edge {u} -> {v}, distance {distance_v}')
 
-        max_out = max(abs(out_v[0]), abs(out_v[1]))
-        out_unit = out_v / max_out
-        print(f'{out_unit} {max_out}')
-
+        mid_point = mid_point or numpy.add(u, distance_v / 2)
         mid_point_anchor_adjust = numpy.multiply(out_v, anchor_size / 16)
-        mid_point = numpy.add(u, distance_v / 2) + mid_point_anchor_adjust
+        mid_point += mid_point_anchor_adjust
         print(f'out_v {out_v}, mid_point {mid_point}, anchor adjust: {mid_point_anchor_adjust}')
 
-        state = EdgeScanState()
-        i, j = 0, 0
-        while int(i) != out_v[0] and int(j) != out_v[1]:
-            x = int(mid_point[0] + i)
-            y = int(mid_point[1] + j)
-            active = self._test_pixel(x, y)
-            size = state.process(active)
-            if size:
-                print(f'found something at {x}, {y}. {i}, {j}. {size}')
-                edge = numpy.subtract((x, y), out_unit*2).astype(int)
-                if self.chase_edge(edge, distance_unit):
-                    return edge[0], edge[1]
-            i += out_unit[0]
-            j += out_unit[1]
+        in_v = (-out_v[0], -out_v[1])
+        for check in (out_v, in_v):
+            max_check = max(abs(check[0]), abs(check[1]))
+            unit = check / max_check
+            print(f'checking: {unit} {max_check}')
+
+            state = EdgeScanState()
+            i, j = 0, 0
+            while int(i) != check[0] and int(j) != check[1]:
+                x = int(mid_point[0] + i)
+                y = int(mid_point[1] + j)
+                active = self._test_pixel(x, y)
+                size = state.process(active)
+                if size:
+                    print(f'found something at {x}, {y}. {i}, {j}. {size}')
+                    edge = numpy.subtract((x, y), (unit*size)/2).astype(int)
+                    if self.chase_edge(edge, distance_unit):
+                        return edge[0], edge[1]
+                i += unit[0]
+                j += unit[1]
         return None
 
     def scan_edges(self, align, anchor_size):
+        mp = calculate_midpoints(align)
+        print(f'mid top: {mp.top}')
         bounds = [
-            (align.top_left, align.top_right),
-            (align.top_right, align.bottom_right),
-            (align.bottom_right, align.bottom_left),
-            (align.bottom_left, align.top_left),
+            (align.top_left, align.top_right, mp.top),
+            (align.top_right, align.bottom_right, mp.right),
+            (align.bottom_right, align.bottom_left, mp.bottom),
+            (align.bottom_left, align.top_left, mp.left),
         ]
         edges = []
-        for start, end in bounds:
-            res = self.find_edge(start, end, anchor_size)
+        for start, end, mid in bounds:
+            res = self.find_edge(start, end, mid, anchor_size)
             edges.append(res)
         return edges

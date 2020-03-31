@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 
 """color-icon-matrix barcode
-or symbol-matrix barcode?
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--deskew] [--dark]
+  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--no-deskew] [--partial-deskew]
+              [--dark]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark]
   ./cimbar.py (-h | --help)
 
@@ -19,7 +19,9 @@ Options:
   --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
-  --dark                           Use dark mode.
+  --dark                           Use inverted palette.
+  --no-deskew                      Don't try to deskew during decode.
+  --partial-deskew                 Do minimal-effort deskew during decode.
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -40,8 +42,8 @@ CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
 
 
-def detect_and_deskew(src_image, temp_image, dark):
-    deskewer(src_image, temp_image, dark)
+def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False):
+    deskewer(src_image, temp_image, dark, use_edges=not partial_deskew)
 
 
 def _decode_cell(ct, img, x, y, drift):
@@ -61,12 +63,12 @@ def _decode_cell(ct, img, x, y, drift):
     return best_bits, best_dx, best_dy
 
 
-def decode_iter(src_image, dark, deskew):
+def decode_iter(src_image, dark, deskew, partial_deskew):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img, dark)
+        detect_and_deskew(src_image, temp_img, dark, partial_deskew)
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
@@ -83,9 +85,9 @@ def decode_iter(src_image, dark, deskew):
             pass
 
 
-def decode(src_image, outfile, dark=False, deskew=True):
+def decode(src_image, outfile, dark=False, deskew=True, partial_deskew=False):
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, deskew):
+        for bits in decode_iter(src_image, dark, deskew, partial_deskew):
             f.write(bits)
 
 
@@ -139,9 +141,10 @@ def main():
         encode(src_data, dst_image, dark)
         return
 
+    deskew = not args['--no-deskew']
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, args['--deskew'])
+    decode(src_image, dst_data, dark, deskew, args['--partial-deskew'])
 
 
 if __name__ == '__main__':
