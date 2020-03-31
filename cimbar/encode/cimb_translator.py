@@ -1,3 +1,4 @@
+from collections import defaultdict
 from os import path
 
 import imagehash
@@ -7,16 +8,18 @@ from PIL import Image
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
 
 
-POSSIBLE_COLORS = [
-    (0, 0, 0, 255),
-    (0, 255, 255, 255),
-    (255, 255, 0, 255),
-    (255, 0, 255, 255),
-    (0, 0, 255, 255),
-    (0, 255, 0, 255),
-    (255, 0, 0, 255),
-    (255, 127, 0, 255),
-]
+def possible_colors(dark):
+    colors = [
+        (0, 255, 255, 255),
+        (255, 255, 0, 255),
+        (255, 0, 255, 255),
+        (0, 255, 0, 255),
+        (0, 0, 255, 255),
+        (255, 0, 0, 255),
+        (255, 127, 0, 255),
+        (127, 255, 0, 255),
+    ]
+    return colors
 
 
 def load_tile(name, dark, replacements={}):
@@ -40,9 +43,10 @@ class CimbDecoder:
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
-        self.colors = [
-            POSSIBLE_COLORS[c] for c in range(2 ** color_bits)
-        ]
+        self.bg_color = (0, 0, 0, 255) if dark else (255, 255, 255, 255)
+
+        all_colors = possible_colors(dark)
+        self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
         for i in range(2 ** symbol_bits):
             name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
             img = load_tile(name, self.dark)
@@ -57,8 +61,8 @@ class CimbDecoder:
             if distance < min_distance:
                 min_distance = distance
                 best_fit = i
-            if min_distance == 0:
-                break
+                if min_distance == 0:
+                    break
         #if min_distance > 0:
         #    print(f'min distance is {min_distance}. best fit {best_fit}')
         return best_fit, min_distance
@@ -67,17 +71,47 @@ class CimbDecoder:
         cell_hash = imagehash.average_hash(img_cell)
         return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
 
+    def _check_color(self, c, d):
+        return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
+
+    def _best_color(self, r, g, b):
+        # probably some scaling will be good.
+        # we can do fairly straightforward min/max scaling for everything except black/white
+
+        # bg color check
+        best_fit = -1
+        best_distance = self._check_color(self.bg_color, (r, g, b))
+        if best_distance < 50:
+            return best_fit, best_distance
+
+        for i, c in self.colors.items():
+            diff = self._check_color(c, (r, g, b))
+            if diff < best_distance:
+                best_fit = i
+                best_distance = diff
+                if best_distance < 50:
+                    break
+        return best_fit, best_distance
+
     def decode_color(self, img_cell):
         if len(self.colors) <= 1:
             return 0
-        candidates = {}
-        pixdata = img.load()
+
+        candidates = defaultdict(int)
+        pixdata = img_cell.load()
         width, height = img_cell.size
         for y in range(1, height - 1):
             for x in range(1, width - 1):
-                r, g, b, _ = pixdata[x, y]
-        bits = 0
+                r, g, b = pixdata[x, y]
+                fit, distance = self._best_color(r, g, b)
+                if fit < 0:
+                    continue
+                candidates[fit] += 1
+                if candidates[fit] > 5:
+                    return fit << self.symbol_bits
+
         # left shift final result by `symbol_bits`
+        bits = max(candidates, key=candidates.get)
         return bits << self.symbol_bits
 
 
@@ -86,17 +120,16 @@ class CimbEncoder:
         self.img = {}
         self.colors = {}
 
+        all_colors = possible_colors(dark)
         num_symbols = 2 ** symbol_bits
         for c in range(2 ** color_bits):
-            color = POSSIBLE_COLORS[c]
+            color = all_colors[c]
             for i in range(num_symbols):
                 name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
                 self.img[c * num_symbols + i] = self._load_img(name, dark, color)
 
     def _load_img(self, name, dark, color):
         # replace by color...
-        if dark and color == (0, 0, 0, 255):
-            color = (255, 255, 255, 255)
         replacements = {
             (0, 255, 255, 255): color,
         }

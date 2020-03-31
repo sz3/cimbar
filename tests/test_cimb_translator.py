@@ -21,10 +21,20 @@ class CimbDecoderTest(TestCase):
             self.assertEqual(error, 0)
             img.close()'''
 
-    def test_decode_symbol_dark(self):
-        cimb = CimbDecoder(True, 4)
-        img_path = path.join(CIMBAR_ROOT, 'tests', 'sample', '05.png')
-        img = Image.open(img_path)
+    def test_decode_dark(self):
+        cimb = CimbDecoder(True, 4, 2)
+        img = Image.open(path.join(CIMBAR_ROOT, 'tests', 'sample', '15.png'))
         decoded, error = cimb.decode_symbol(img)
         self.assertEqual(decoded, 5)
         self.assertEqual(error, 0)
+
+        color = cimb.decode_color(img)
+        self.assertEqual(color, 1 << 4)
+
+        img2 = Image.open(path.join(CIMBAR_ROOT, 'tests', 'sample', '25.png'))
+        decoded, error = cimb.decode_symbol(img2)
+        self.assertEqual(decoded, 5)
+        self.assertEqual(error, 0)
+
+        color = cimb.decode_color(img2)
+        self.assertEqual(color, 2 << 4)

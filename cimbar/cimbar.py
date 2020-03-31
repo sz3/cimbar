@@ -54,15 +54,16 @@ def _decode_cell(ct, img, x, y, drift):
         testX = x + drift.x + dx
         testY = y + drift.y + dy
         img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
-        bits, min_distance = ct.decode(img_cell)
+        bits, min_distance = ct.decode_symbol(img_cell)
         best_distance = min(min_distance, best_distance)
         if min_distance == best_distance:
-            best_bits = bits  # + color bits?
+            best_bits = bits
             best_dx = dx
             best_dy = dy
+            best_cell = img_cell
         if min_distance < 8:
             break
-    return best_bits, best_dx, best_dy
+    return best_bits + ct.decode_color(best_cell), best_dx, best_dy
 
 
 def decode_iter(src_image, dark, deskew, partial_deskew):
