@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
-"""color-iconographic-matrix barcode
+"""color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--deskew] [--dark]
+  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--no-deskew] [--partial-deskew]
+              [--dark]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark]
   ./cimbar.py (-h | --help)
 
@@ -18,7 +19,9 @@ Options:
   --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
-  --dark                           Use dark mode.
+  --dark                           Use inverted palette.
+  --no-deskew                      Don't try to deskew during decode.
+  --partial-deskew                 Do minimal-effort deskew during decode.
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -31,15 +34,16 @@ from cimbar.encode.cimb_translator import CimbTranslator, cell_drift, cell_posit
 from cimbar.util.bit_file import bit_file
 
 
-TOTAL_SIZE = 1008
+TOTAL_SIZE = 1024
 BITS_PER_OP = 4
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
+CELLS_OFFSET = 8
 
 
-def detect_and_deskew(src_image, temp_image, dark):
-    deskewer(src_image, temp_image, dark)
+def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False):
+    deskewer(src_image, temp_image, dark, use_edges=not partial_deskew)
 
 
 def _decode_cell(ct, img, x, y, drift):
@@ -51,7 +55,7 @@ def _decode_cell(ct, img, x, y, drift):
         bits, min_distance = ct.decode(img_cell)
         best_distance = min(min_distance, best_distance)
         if min_distance == best_distance:
-            best_bits = bits
+            best_bits = bits  # + color bits?
             best_dx = dx
             best_dy = dy
         if min_distance < 8:
@@ -59,19 +63,19 @@ def _decode_cell(ct, img, x, y, drift):
     return best_bits, best_dx, best_dy
 
 
-def decode_iter(src_image, dark, deskew):
+def decode_iter(src_image, dark, deskew, partial_deskew):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img, dark)
+        detect_and_deskew(src_image, temp_img, dark, partial_deskew)
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
     ct = CimbTranslator(dark, bits=BITS_PER_OP)
 
     drift = cell_drift()
-    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
+    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
         best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
         drift.update(best_dx, best_dy)
         yield best_bits
@@ -81,28 +85,39 @@ def decode_iter(src_image, dark, deskew):
             pass
 
 
-def decode(src_image, outfile, dark=False, deskew=True):
+def decode(src_image, outfile, dark=False, deskew=True, partial_deskew=False):
     with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, deskew):
+        for bits in decode_iter(src_image, dark, deskew, partial_deskew):
             f.write(bits)
 
 
 def _get_image_template(width, dark):
     color = (0, 0, 0) if dark else (255, 255, 255)
     img = Image.new('RGB', (width, width), color=color)
-    anchor_src = 'bitmap/anchor-dark.png' if dark else 'bitmap/anchor-light.png'
-    anchor = Image.open(anchor_src)
+
+    suffix = 'dark' if dark else 'light'
+    anchor = Image.open(f'bitmap/anchor-{suffix}.png')
     aw, ah = anchor.size
     img.paste(anchor, (0, 0))
     img.paste(anchor, (0, width-ah))
     img.paste(anchor, (width-aw, 0))
     img.paste(anchor, (width-aw, width-ah))
+
+    horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
+    gw, _ = horizontal_guide.size
+    img.paste(horizontal_guide, (width//2 - gw//2, 3))
+    img.paste(horizontal_guide, (width//2 - gw//2, width-5))
+
+    vertical_guide = Image.open(f'bitmap/guide-vertical-{suffix}.png')
+    _, gh = vertical_guide.size
+    img.paste(vertical_guide, (3, width//2 - gw//2))
+    img.paste(vertical_guide, (width-5, width//2 - gw//2))
     return img
 
 
 def encode_iter(src_data):
     with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
-        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS):
+        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
             bits = f.read()
             yield bits, x, y
 
@@ -126,9 +141,10 @@ def main():
         encode(src_data, dst_image, dark)
         return
 
+    deskew = not args['--no-deskew']
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, args['--deskew'])
+    decode(src_image, dst_data, dark, deskew, args['--partial-deskew'])
 
 
 if __name__ == '__main__':

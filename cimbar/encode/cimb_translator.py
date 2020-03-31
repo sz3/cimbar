@@ -15,15 +15,21 @@ class CimbTranslator:
 
     def _load_img(self, name):
         img = Image.open(name)
-        if not self.dark:
-            return img
+        # replace by color...
+        replacements = {
+            # (0, 255, 255, 255): (255, 255, 0, 255),
+        }
+        if self.dark:
+            replacements[(255, 255, 255, 255)] = (0, 0, 0, 255)
 
         pixdata = img.load()
         width, height = img.size
         for y in range(height):
             for x in range(width):
-                if pixdata[x, y] == (255, 255, 255, 255):
-                    pixdata[x, y] = (0, 0, 0, 255)
+                for current_color, desired_color in replacements.items():
+                    if pixdata[x, y] == current_color:
+                        pixdata[x, y] = desired_color
+                        break
         return img
 
     def get_best_fit(self, cell_hash):
@@ -42,7 +48,7 @@ class CimbTranslator:
 
     def decode(self, img_cell):
         cell_hash = imagehash.average_hash(img_cell)
-        return self.get_best_fit(cell_hash)
+        return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
 
     def encode(self, bits):
         return self.img[bits]
@@ -72,7 +78,7 @@ class cell_drift:
             self.y = 0-self.limit
 
 
-def cell_positions(spacing, dimensions, marker_size=6):
+def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112
@@ -84,26 +90,27 @@ def cell_positions(spacing, dimensions, marker_size=6):
     112 * 8
     '''
     #cells = dimensions * dimensions
+    offset_y = offset + 1
     marker_offset_x = spacing * marker_size
     top_width = dimensions - marker_size - marker_size
     top_cells = top_width * marker_size
     for i in range(top_cells):
-        x = (i % top_width) * spacing + marker_offset_x
-        y = (i // top_width) * spacing
+        x = (i % top_width) * spacing + marker_offset_x + offset
+        y = (i // top_width) * spacing + offset_y
         yield x, y
 
     mid_y = marker_size * spacing
     mid_width = dimensions
     mid_cells = mid_width * top_width  # top_width is also "mid_height"
     for i in range(mid_cells):
-        x = (i % mid_width) * spacing
-        y = (i // mid_width) * spacing + mid_y
+        x = (i % mid_width) * spacing + offset
+        y = (i // mid_width) * spacing + mid_y + offset_y
         yield x, y
 
     bottom_y = (dimensions - marker_size) * spacing
     bottom_width = top_width
     bottom_cells = bottom_width * marker_size
     for i in range(bottom_cells):
-        x = (i % bottom_width) * spacing + marker_offset_x
-        y = (i // bottom_width) * spacing + bottom_y
+        x = (i % bottom_width) * spacing + marker_offset_x + offset
+        y = (i // bottom_width) * spacing + bottom_y + offset_y
         yield x, y
