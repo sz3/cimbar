@@ -6,6 +6,8 @@ from random import shuffle
 import imagehash
 from PIL import Image
 
+from cimbar.util.skip_iterator import skip_iterator
+
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
 
@@ -93,12 +95,12 @@ class CimbDecoder:
         # probably some scaling will be good.
         # we can do fairly straightforward min/max scaling for everything except black/white
         max_val = max(r, g, b, 1)
-        print(f'pixel {r:02x}{g:02x}{b:02x}')
+        #print(f'pixel {r:02x}{g:02x}{b:02x}')
         adjust = 255 / max_val
         r = self._fix_color(r, adjust)
         g = self._fix_color(g, adjust)
         b = self._fix_color(b, adjust)
-        print(f'  adjusted: {r:02x}{g:02x}{b:02x}')
+        #print(f'  adjusted: {r:02x}{g:02x}{b:02x}')
 
         # bg color check
         best_fit = -1
@@ -113,7 +115,7 @@ class CimbDecoder:
                 best_distance = diff
                 if best_distance < 50:
                     break
-        print(f'  best_fit: {best_fit} , {best_distance}')
+        #print(f'  best_fit: {best_fit} , {best_distance}')
         return best_fit, best_distance
 
     def decode_color(self, img_cell):
@@ -124,10 +126,8 @@ class CimbDecoder:
         pixdata = img_cell.load()
         width, height = img_cell.size
 
-        # randomly iterate over pixels in cell, excluding the first and last rows and columns
-        to_check = list(itertools.product(range(1, width - 1), range(1, height - 1)))
-        shuffle(to_check)
-        for x, y in to_check:
+        # "randomly" iterate over pixels in cell, excluding the first and last rows and columns
+        for x, y in skip_iterator(itertools.product(range(1, width - 1), range(1, height - 1)), 31):
             r, g, b = pixdata[x, y]
             fit, distance = self._best_color(r, g, b)
             if fit < 0:
