@@ -1,5 +1,7 @@
+import itertools
 from collections import defaultdict
 from os import path
+from random import shuffle
 
 import imagehash
 from PIL import Image
@@ -46,12 +48,13 @@ def load_tile(name, dark, replacements={}):
 
 
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0):
+    def __init__(self, dark, symbol_bits, color_bits=0, color_threshold=80):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
-        self.bg_color = (0, 0, 0, 255) if dark else (255, 255, 255, 255)
 
+        self.color_threshold = color_threshold
+        self.bg_color = (0, 0, 0, 255) if dark else (255, 255, 255, 255)
         all_colors = possible_colors(dark)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
         for i in range(2 ** symbol_bits):
@@ -81,14 +84,26 @@ class CimbDecoder:
     def _check_color(self, c, d):
         return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
 
+    def _fix_color(self, c, adjust):
+        if c <= self.color_threshold:
+            return 0
+        return int(c * adjust)
+
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
         # we can do fairly straightforward min/max scaling for everything except black/white
+        max_val = max(r, g, b, 1)
+        print(f'pixel {r:02x}{g:02x}{b:02x}')
+        adjust = 255 / max_val
+        r = self._fix_color(r, adjust)
+        g = self._fix_color(g, adjust)
+        b = self._fix_color(b, adjust)
+        print(f'  adjusted: {r:02x}{g:02x}{b:02x}')
 
         # bg color check
         best_fit = -1
         best_distance = self._check_color(self.bg_color, (r, g, b))
-        if best_distance < 50:
+        if best_distance < 2500:
             return best_fit, best_distance
 
         for i, c in self.colors.items():
@@ -98,6 +113,7 @@ class CimbDecoder:
                 best_distance = diff
                 if best_distance < 50:
                     break
+        print(f'  best_fit: {best_fit} , {best_distance}')
         return best_fit, best_distance
 
     def decode_color(self, img_cell):
@@ -107,15 +123,18 @@ class CimbDecoder:
         candidates = defaultdict(int)
         pixdata = img_cell.load()
         width, height = img_cell.size
-        for y in range(1, height - 1):
-            for x in range(1, width - 1):
-                r, g, b = pixdata[x, y]
-                fit, distance = self._best_color(r, g, b)
-                if fit < 0:
-                    continue
-                candidates[fit] += 1
-                if candidates[fit] > 5:
-                    return fit << self.symbol_bits
+
+        # randomly iterate over pixels in cell, excluding the first and last rows and columns
+        to_check = list(itertools.product(range(1, width - 1), range(1, height - 1)))
+        shuffle(to_check)
+        for x, y in to_check:
+            r, g, b = pixdata[x, y]
+            fit, distance = self._best_color(r, g, b)
+            if fit < 0:
+                continue
+            candidates[fit] += 1
+            if candidates[fit] > 5:
+                return fit << self.symbol_bits
 
         # left shift final result by `symbol_bits`
         bits = max(candidates, key=candidates.get)
