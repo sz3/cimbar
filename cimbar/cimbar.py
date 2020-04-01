@@ -81,8 +81,7 @@ def decode_iter(src_image, dark, deskew, partial_deskew):
     for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
         best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
         drift.update(best_dx, best_dy)
-        color_bits = ct.decode_color(img)
-        yield best_bits + color_bits
+        yield best_bits
 
     if tempdir:  # cleanup
         with tempdir:
