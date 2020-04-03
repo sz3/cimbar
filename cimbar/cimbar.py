@@ -31,6 +31,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, cell_drift, cell_positions
+from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 
 
@@ -89,7 +90,7 @@ def decode_iter(src_image, dark, deskew, partial_deskew):
 
 
 def decode(src_image, outfile, dark=False, deskew=True, partial_deskew=False):
-    with bit_file(outfile, bits_per_op=BITS_PER_OP, mode='write') as f:
+    with reed_solomon_stream(outfile, mode='write') as rss, bit_file(rss, bits_per_op=BITS_PER_OP, mode='write') as f:
         for bits in decode_iter(src_image, dark, deskew, partial_deskew):
             f.write(bits)
 
@@ -119,7 +120,7 @@ def _get_image_template(width, dark):
 
 
 def encode_iter(src_data):
-    with bit_file(src_data, bits_per_op=BITS_PER_OP) as f:
+    with reed_solomon_stream(src_data) as rss, bit_file(rss, bits_per_op=BITS_PER_OP) as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
             bits = f.read()
             yield bits, x, y
