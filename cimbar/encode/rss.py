@@ -2,11 +2,11 @@ from reedsolo import RSCodec
 
 
 class reed_solomon_stream:
-    def __init__(self, f, ec=12, mode='read'):
+    def __init__(self, f, ec=12, chunk_size=155, mode='read'):
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
         self.mode = mode
-        self.rsc = RSCodec(ec)
+        self.rsc = RSCodec(ec, nsize=chunk_size)
 
         if isinstance(f, str):
             fmode = 'wb' if mode == 'write' else 'rb'
@@ -27,9 +27,7 @@ class reed_solomon_stream:
                 pass
 
     def write(self, buffer):
-        # we can only decode multiples of 255 -- the remainder will have to be dropped
-        remainder = len(buffer) % 255
-        decoded = bytes(self.rsc.decode(buffer[:-remainder])[0])
+        decoded = bytes(self.rsc.decode(buffer)[0])
         self.f.write(decoded)
 
     def read(self, max_bytes):
