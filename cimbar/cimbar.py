@@ -4,8 +4,8 @@
 
 Usage:
   ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--no-deskew] [--partial-deskew]
-              [--dark] [--no-ecc]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark] [--no-ecc]
+              [--dark] [--ecc=<0-100>]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark] [--ecc=<0-100>]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -20,8 +20,8 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
   --dark                           Use inverted palette.
+  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 10]
   --no-deskew                      Don't try to deskew during decode.
-  --no-ecc                         No reed-solomon error correction. (testing only)
   --partial-deskew                 Do minimal-effort deskew during decode.
 """
 from os import path
@@ -44,6 +44,7 @@ CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
+ECC = 10
 
 
 def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False):
@@ -90,8 +91,8 @@ def decode_iter(src_image, dark, deskew, partial_deskew):
             pass
 
 
-def decode(src_image, outfile, dark=False, deskew=True, partial_deskew=False, no_ecc=False):
-    rss = open(outfile, 'wb') if no_ecc else reed_solomon_stream(outfile, mode='write')
+def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, partial_deskew=False):
+    rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, bit_file(outstream, bits_per_op=BITS_PER_OP, mode='write') as f:
         for bits in decode_iter(src_image, dark, deskew, partial_deskew):
             f.write(bits)
@@ -121,18 +122,18 @@ def _get_image_template(width, dark):
     return img
 
 
-def encode_iter(src_data, no_ecc=False):
-    rss = open(src_data, 'rb') if no_ecc else reed_solomon_stream(src_data)
+def encode_iter(src_data, ecc):
+    rss = reed_solomon_stream(src_data, ecc) if ecc else open(src_data, 'rb')
     with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP) as f:
         for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
             bits = f.read()
             yield bits, x, y
 
 
-def encode(src_data, dst_image, dark=False, no_ecc=False):
+def encode(src_data, dst_image, dark=False, ecc=ECC):
     img = _get_image_template(TOTAL_SIZE, dark)
     ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    for bits, x, y in encode_iter(src_data, no_ecc):
+    for bits, x, y in encode_iter(src_data, ecc):
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
     img.save(dst_image)
@@ -142,16 +143,18 @@ def main():
     args = docopt(__doc__, version='CIMBar 0.0.1')
 
     dark = args['--dark']
+    ecc = int(args.get('--ecc', '10'))
+
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
         dst_image = args['<dst_image>'] or args['--dst_image']
-        encode(src_data, dst_image, dark, args['--no-ecc'])
+        encode(src_data, dst_image, dark, ecc)
         return
 
     deskew = not args['--no-deskew']
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, deskew, args['--partial-deskew'], args['--no-ecc'])
+    decode(src_image, dst_data, dark, ecc, deskew, args['--partial-deskew'])
 
 
 if __name__ == '__main__':
