@@ -170,9 +170,14 @@ class CimbarScanner:
             x = self.width
             yield Anchor(x=x-res, xmax=x-1, y=y)
 
-    def vertical_scan(self, x):
+    def vertical_scan(self, x, r=None):
         state = ScanState()
-        for y in range(self.height):
+        if r:
+            r = (max(r[0], 0), min(r[1], self.height))
+            # print(f'vertically scanning {x} from {r} instead of all the way to {self.height}')
+        else:
+            r = (0, self.height)
+        for y in range(*r):
             active = self._test_pixel(x, y)
             res = state.process(active)
             if res:
@@ -185,18 +190,13 @@ class CimbarScanner:
             y = self.height
             yield Anchor(x=x, y=y-res, ymax=y-1)
 
-    def diagonal_scan(self, target_x, target_y):
-        # find top/left point first, then go down right
-        offset = abs(target_x - target_y)
-        if target_x < target_y:
-            start_y = offset
-            start_x = 0
-        else:
-            start_x = offset
-            start_y = 0
+    def diagonal_scan(self, start_x, end_x, start_y, end_y):
+        start_x = max(0, start_x)
+        start_y = max(0, start_y)
+        end_x = min(self.width, end_x)
+        end_y = min(self.height, end_y)
 
-        #if (target_x, target_y) == (346, 3005):
-        #    print(f'scanning from {start_x}, {start_y} for {target_x},{target_y}')
+        # print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
         state = ScanState()
         x = start_x
@@ -238,9 +238,9 @@ class CimbarScanner:
         gets a smart answer for Ys
         '''
         results = []
-        xs = set([p.xavg for p in candidates])
-        for x in xs:
-            results += list(self.vertical_scan(x))
+        for p in candidates:
+            range_guess = (p.y - (2 * p.xrange), p.y + (2 * p.xrange))
+            results += list(self.vertical_scan(p.xavg, range_guess))
         return self.deduplicate_candidates(results)
 
     def t3_scan_diagonal(self, candidates):
@@ -249,7 +249,8 @@ class CimbarScanner:
         '''
         results = []
         for p in candidates:
-            results += list(self.diagonal_scan(p.xavg, p.yavg))
+            range_guess = (p.x - (2 * p.yrange), p.x + (2 * p.yrange), p.y - p.yrange, p.ymax + p.yrange)
+            results += list(self.diagonal_scan(*range_guess))
         return self.deduplicate_candidates(results)
 
     def deduplicate_candidates(self, candidates):
