@@ -113,7 +113,7 @@ class CimbDecoder:
             if diff < best_distance:
                 best_fit = i
                 best_distance = diff
-                if best_distance < 50:
+                if best_distance < 2500:
                     break
         #print(f'  best_fit: {best_fit} , {best_distance}')
         return best_fit, best_distance
