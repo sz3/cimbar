@@ -6,12 +6,16 @@ MAX_ENCODING = 16384
 
 
 class bit_file:
-    def __init__(self, filename, bits_per_op, mode='read', read_size=MAX_ENCODING):
+    def __init__(self, f, bits_per_op, mode='read', read_size=MAX_ENCODING):
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
-        self.mode = 'wb' if mode == 'write' else 'rb'
+        self.mode = mode
 
-        self.f = open(filename, self.mode)
+        if isinstance(f, str):
+            fmode = 'wb' if mode == 'write' else 'rb'
+            self.f = open(f, fmode)
+        else:
+            self.f = f
         self.bits_per_op = bits_per_op
         self.stream = BitStream()
         if mode == 'read':
@@ -21,10 +25,11 @@ class bit_file:
         return self
 
     def __exit__(self, type, value, traceback):
-        if self.mode == 'wb':
+        if self.mode == 'write':
             self.save()
-        with self.f:  # close file
-            pass
+        if not self.f.closed:
+            with self.f:  # close file
+                pass
 
     def write(self, bits):
         b1 = Bits(uint=bits, length=self.bits_per_op)

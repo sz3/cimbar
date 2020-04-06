@@ -1,4 +1,7 @@
 bitstring
 docopt
 imagehash
+numpy
+opencv-python
 pillow
+reedsolo
