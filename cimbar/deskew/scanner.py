@@ -129,12 +129,46 @@ def _the_works(img):
 
 
 class CimbarAlignment:
-    def __init__(self, four_corners):
-        self.four_corners = four_corners
-        self.top_left = four_corners[0]
-        self.top_right = four_corners[1]
-        self.bottom_left = four_corners[2]
-        self.bottom_right = four_corners[3]
+    def __init__(self, corners):
+        self.corners = corners
+
+    @property
+    def top_left(self):
+        return self.corners[0]
+
+    @property
+    def top_right(self):
+        return self.corners[1]
+
+    @property
+    def bottom_left(self):
+        return self.corners[2]
+
+    @property
+    def bottom_right(self):
+        return self.corners[3]
+
+
+class CimbarEdges:
+    def __init__(self, edges, midpoints):
+        self.edges = edges
+        self.midpoints = midpoints
+
+    @property
+    def top_mid(self):
+        return self.midpoints[0]
+
+    @property
+    def right_mid(self):
+        return self.midpoints[1]
+
+    @property
+    def bottom_mid(self):
+        return self.midpoints[2]
+
+    @property
+    def left_mid(self):
+        return self.midpoints[3]
 
 
 class CimbarScanner:
@@ -363,15 +397,11 @@ class CimbarScanner:
 
     def scan_edges(self, align, anchor_size):
         mp = calculate_midpoints(align)
-        print(f'mid top: {mp.top}')
         bounds = [
             (align.top_left, align.top_right, mp.top),
             (align.top_right, align.bottom_right, mp.right),
             (align.bottom_right, align.bottom_left, mp.bottom),
             (align.bottom_left, align.top_left, mp.left),
         ]
-        edges = []
-        for start, end, mid in bounds:
-            res = self.find_edge(start, end, mid, anchor_size)
-            edges.append(res)
-        return edges
+        edges = [self.find_edge(start, end, mid, anchor_size) for start, end, mid in bounds]
+        return CimbarEdges(edges, mp)

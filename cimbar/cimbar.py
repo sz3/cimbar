@@ -3,8 +3,8 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--no-deskew] [--partial-deskew]
-              [--dark] [--ecc=<0-100>]
+  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark]
+              [--deskew=<0-3>] [--ecc=<0-100>]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark] [--ecc=<0-100>]
   ./cimbar.py (-h | --help)
 
@@ -21,8 +21,7 @@ Options:
   --src_image=<filename>           For decoding. Image to try to decode
   --dark                           Use inverted palette.
   --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 10]
-  --no-deskew                      Don't try to deskew during decode.
-  --partial-deskew                 Do minimal-effort deskew during decode.
+  --deskew=<0-3>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 3]
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -47,8 +46,8 @@ CELLS_OFFSET = 8
 ECC = 10
 
 
-def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False):
-    deskewer(src_image, temp_image, dark, use_edges=not partial_deskew)
+def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False, auto_dewarp=True):
+    deskewer(src_image, temp_image, dark, use_edges=not partial_deskew, auto_dewarp=auto_dewarp)
 
 
 def _decode_cell(ct, img, x, y, drift):
@@ -69,12 +68,12 @@ def _decode_cell(ct, img, x, y, drift):
     return best_bits + ct.decode_color(best_cell), best_dx, best_dy
 
 
-def decode_iter(src_image, dark, deskew, partial_deskew):
+def decode_iter(src_image, dark, deskew, partial_deskew, auto_dewarp):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img, dark, partial_deskew)
+        detect_and_deskew(src_image, temp_img, dark, partial_deskew, auto_dewarp)
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
@@ -91,10 +90,10 @@ def decode_iter(src_image, dark, deskew, partial_deskew):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, partial_deskew=False):
+def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, partial_deskew=False, auto_dewarp=True):
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, bit_file(outstream, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, deskew, partial_deskew):
+        for bits in decode_iter(src_image, dark, deskew, partial_deskew, auto_dewarp):
             f.write(bits)
 
 
@@ -143,7 +142,7 @@ def main():
     args = docopt(__doc__, version='CIMBar 0.0.1')
 
     dark = args['--dark']
-    ecc = int(args.get('--ecc', '10'))
+    ecc = int(args.get('--ecc'))
 
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
@@ -151,10 +150,12 @@ def main():
         encode(src_data, dst_image, dark, ecc)
         return
 
-    deskew = not args['--no-deskew']
+    deskew = int(args.get('--deskew'))
+    partial_deskew = deskew <= 1
+    auto_dewarp = deskew >= 3
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, deskew, args['--partial-deskew'])
+    decode(src_image, dst_data, dark, ecc, deskew, partial_deskew, auto_dewarp)
 
 
 if __name__ == '__main__':
