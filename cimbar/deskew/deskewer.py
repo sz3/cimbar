@@ -29,8 +29,6 @@ def _naive_undistort(img, distortion_factor):
     distCoeff[2,0] = 0.0
     distCoeff[3,0] = 0.0
 
-    print(f'undistort with {distortion_factor}')
-
     cam = numpy.eye(3, dtype=numpy.float32)
     cam[0,2] = width / 2
     cam[1,2] = height / 2
@@ -101,7 +99,6 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
 
     if use_edges and auto_dewarp:
         img = fix_lens_distortion(img, size, anchor_size, align)
-        cv2.imwrite('/tmp/didwefixit.png', img)
         # need to recalculate alignment after dewarp :(
         align = scan(img, dark, use_edges, size, anchor_size)
 
@@ -111,7 +108,6 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
         (size-anchor_size, size-anchor_size), (anchor_size, size-anchor_size)
     ]
     if align.edges:
-        print(f'edges are: {align.edges}')
         mid = size // 2
         for p, outP in zip(align.edges, [(mid, ED_DIST), (size-ED_DIST, mid), (mid, size-ED_DIST), (ED_DIST, mid)]):
             if p:
@@ -119,5 +115,4 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
                 output_pts.append(outP)
 
     out = correct_perspective(img, (size, size), input_pts, output_pts)
-    cv2.imwrite('/tmp/afterpers.png', out)
     cv2.imwrite(dst_image, out)
