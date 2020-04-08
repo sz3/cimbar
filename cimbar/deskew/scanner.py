@@ -129,8 +129,10 @@ def _the_works(img):
 
 
 class CimbarAlignment:
-    def __init__(self, corners):
+    def __init__(self, corners, edges=[], midpoints=[]):
         self.corners = corners
+        self.edges = edges
+        self.midpoints = midpoints
 
     @property
     def top_left(self):
@@ -147,12 +149,6 @@ class CimbarAlignment:
     @property
     def bottom_right(self):
         return self.corners[3]
-
-
-class CimbarEdges:
-    def __init__(self, edges, midpoints):
-        self.edges = edges
-        self.midpoints = midpoints
 
     @property
     def top_mid(self):
@@ -346,8 +342,7 @@ class CimbarScanner:
         print(t2_candidates)
         print(t3_candidates)
 
-        align = CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
-        return align
+        return CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
@@ -404,4 +399,4 @@ class CimbarScanner:
             (align.bottom_left, align.top_left, mp.left),
         ]
         edges = [self.find_edge(start, end, mid, anchor_size) for start, end, mid in bounds]
-        return CimbarEdges(edges, mp)
+        return CimbarAlignment(align.corners, edges, mp)
