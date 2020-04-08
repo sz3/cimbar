@@ -373,7 +373,7 @@ class CimbarScanner:
 
             state = EdgeScanState()
             i, j = 0, 0
-            while not (int(i) == check[0] and int(j) == check[1]):
+            while abs(i) <= abs(check[0]) and abs(j) <= abs(check[1]):
                 x = int(mid_point[0] + i)
                 y = int(mid_point[1] + j)
                 active = self._test_pixel(x, y)
@@ -385,6 +385,7 @@ class CimbarScanner:
                         return edge[0], edge[1]
                 i += unit[0]
                 j += unit[1]
+        #print(' ... no edge?!?!?')
         return None
 
     def scan_edges(self, align, anchor_size):
