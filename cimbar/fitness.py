@@ -1,13 +1,31 @@
-import sys
+#!/usr/bin/python3
+
+"""fitness.py in out
+
+evaluate which tiles are not being decoded properly
+iterate over in by byte, by out over tile, e.g. <n> bits
+use mismatches between decodes from out against encodes from in to determine what tiles are troublemakers
+
+Usage:
+  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-3>]
+  ./fitness.py (-h | --help)
+
+Examples:
+  python -m cimbar.fitness /tmp/baseline.py samples/4color1.jpg
+
+Options:
+  -h --help                        Show this help.
+  --version                        Show version.
+  --dark                           Use inverted palette.
+  --deskew=<0-3>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 3]
+"""
+
 from collections import defaultdict
 
-from cimbar.cimbar import decode_iter, encode_iter, BITS_PER_SYMBOL
+from docopt import docopt
 
-# fitness.py in out
+from cimbar.cimbar import decode_iter, encode_iter, get_deskew_params, BITS_PER_SYMBOL
 
-# evaluate which tiles are not being decoded properly
-# iterate over in by byte, by out over tile, e.g. <n> bits
-# use mismatches between decodes from out against encodes from in to determine what tiles are troublemakers
 
 
 class ErrorTracker:
@@ -37,7 +55,7 @@ class ErrorTracker:
         return str(self)
 
 
-def evaluate(src_file, dst_image, dark, deskew):
+def evaluate(src_file, dst_image, dark, deskew_params):
     # for byte in src_file, decoded_byte in dst_image:
     # if mismatch, tally tile information
     # also track bordering tiles? Edges may matter
@@ -45,7 +63,7 @@ def evaluate(src_file, dst_image, dark, deskew):
     errors_by_tile = defaultdict(ErrorTracker)
 
     ei = encode_iter(src_file, ecc=0)
-    di = decode_iter(dst_image, dark, deskew, partial_deskew=False, auto_dewarp=True)
+    di = decode_iter(dst_image, dark, **deskew_params)
     for (expected_bits, x, y), actual_bits in zip(ei, di):
         if expected_bits != actual_bits:
             # print(f'!!! {expected_bits} != {actual_bits} at {x},{y}')
@@ -78,9 +96,13 @@ def evaluate(src_file, dst_image, dark, deskew):
 
 
 def main():
-    src_file = sys.argv[1]
-    dst_image = sys.argv[2]
-    evaluate(src_file, dst_image, dark=True, deskew=True)
+    args = docopt(__doc__, version='cimbar fitness check 0.0.1')
+
+    src_file = args['<decoded_baseline>']
+    dst_image = args['<encoded_image>']
+    dark = args.get('--dark')
+    deskew_params = get_deskew_params(args.get('--deskew'))
+    evaluate(src_file, dst_image, dark, deskew_params)
 
 
 if __name__ == '__main__':

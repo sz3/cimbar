@@ -46,6 +46,15 @@ CELLS_OFFSET = 8
 ECC = 10
 
 
+def get_deskew_params(level):
+    level = int(level)
+    return {
+        'deskew': level,
+        'partial_deskew': level <= 1,
+        'auto_dewarp': level >= 3,
+    }
+
+
 def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False, auto_dewarp=True):
     deskewer(src_image, temp_image, dark, use_edges=not partial_deskew, auto_dewarp=auto_dewarp)
 
@@ -150,12 +159,10 @@ def main():
         encode(src_data, dst_image, dark, ecc)
         return
 
-    deskew = int(args.get('--deskew'))
-    partial_deskew = deskew <= 1
-    auto_dewarp = deskew >= 3
+    deskew = get_deskew_params(args.get('--deskew'))
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, deskew, partial_deskew, auto_dewarp)
+    decode(src_image, dst_data, dark, ecc, **deskew)
 
 
 if __name__ == '__main__':
