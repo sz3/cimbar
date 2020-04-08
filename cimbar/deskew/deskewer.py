@@ -24,16 +24,18 @@ def _naive_undistort(img, distortion_factor):
     print(f'{height},{width}, ... {distortion_factor}')
 
     distCoeff = numpy.zeros((4,1),numpy.float64)
-    distCoeff[0,0] = distortion_factor;
-    distCoeff[1,0] = 0.0;
-    distCoeff[2,0] = 0.0;
-    distCoeff[3,0] = 0.0;
+    distCoeff[0,0] = distortion_factor    # ex: -0.0043366581750921215
+    distCoeff[1,0] = 0.0
+    distCoeff[2,0] = 0.0
+    distCoeff[3,0] = 0.0
+
+    print(f'undistort with {distortion_factor}')
 
     cam = numpy.eye(3, dtype=numpy.float32)
     cam[0,2] = width / 2
     cam[1,2] = height / 2
-    cam[0,0] = 1000.
-    cam[1,1] = 1000.
+    cam[0,0] = 925.
+    cam[1,1] = 925.
 
     return cv2.undistort(img, cam, distCoeff)
 
@@ -63,17 +65,17 @@ def _get_distortion_factor(align, target_ratio):
         (align.edges[3], align.left_mid, align.bottom_left, align.top_left),
     ]
 
-    max_ratio = 0
+    all_ratios = []
     for edj, line_mid, line_start, line_end in eparams:
         ratio = distance(edj, line_mid) / distance(line_start, line_end)
-        max_ratio = max(ratio, max_ratio)
-    return target_ratio - max_ratio
+        all_ratios.append(ratio)
+    avg = sum(all_ratios) / len(all_ratios)
+    return target_ratio - avg
 
 
 def fix_lens_distortion(img, dest_size, anchor_size, align):
     target_ratio = _edge_to_anchor_ratio(dest_size, anchor_size)
     df = _get_distortion_factor(align, target_ratio)
-    print(f'target_ratio {target_ratio}, distortion factor {df}')
     return _naive_undistort(img, df)
 
 

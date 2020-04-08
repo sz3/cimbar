@@ -1,7 +1,6 @@
 import itertools
 from collections import defaultdict
 from os import path
-from random import shuffle
 
 import imagehash
 from PIL import Image
@@ -59,6 +58,7 @@ class CimbDecoder:
         self.bg_color = (0, 0, 0, 255) if dark else (255, 255, 255, 255)
         all_colors = possible_colors(dark)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
+
         for i in range(2 ** symbol_bits):
             name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
             img = load_tile(name, self.dark)
@@ -88,18 +88,21 @@ class CimbDecoder:
 
     def _fix_color(self, c, adjust):
         if c <= self.color_threshold:
-            return 0
+            return int(c * adjust // 2)
         return int(c * adjust)
 
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
         # we can do fairly straightforward min/max scaling for everything except black/white
-        max_val = max(r, g, b, 1)
         #print(f'pixel {r:02x}{g:02x}{b:02x}')
-        adjust = 255 / max_val
-        r = self._fix_color(r, adjust)
-        g = self._fix_color(g, adjust)
-        b = self._fix_color(b, adjust)
+        max_val = max(r, g, b, 1)
+        if max_val < self.color_threshold:
+            r, g, b = (0, 0, 0)
+        else:
+            adjust = 255 / max_val
+            r = self._fix_color(r, adjust)
+            g = self._fix_color(g, adjust)
+            b = self._fix_color(b, adjust)
         #print(f'  adjusted: {r:02x}{g:02x}{b:02x}')
 
         # bg color check
@@ -131,6 +134,7 @@ class CimbDecoder:
             r, g, b = pixdata[x, y]
             fit, distance = self._best_color(r, g, b)
             if fit < 0:
+                #print(f'no color for {x},{y}: {r},{g},{b} -> {fit}, {distance}')
                 continue
             candidates[fit] += 1
             if candidates[fit] > 5:

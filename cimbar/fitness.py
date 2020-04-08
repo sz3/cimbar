@@ -45,7 +45,7 @@ def evaluate(src_file, dst_image, dark, deskew):
     errors_by_tile = defaultdict(ErrorTracker)
 
     ei = encode_iter(src_file, ecc=0)
-    di = decode_iter(dst_image, dark, deskew, partial_deskew=False)
+    di = decode_iter(dst_image, dark, deskew, partial_deskew=False, auto_dewarp=True)
     for (expected_bits, x, y), actual_bits in zip(ei, di):
         if expected_bits != actual_bits:
             # print(f'!!! {expected_bits} != {actual_bits} at {x},{y}')
