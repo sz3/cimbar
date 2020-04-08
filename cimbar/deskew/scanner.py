@@ -360,7 +360,7 @@ class CimbarScanner:
         distance_v = numpy.subtract(v, u)
         distance_unit = distance_v / 512
         out_v = (distance_v[1] // 64, -distance_v[0] // 64)
-        # print(f'edge {u} -> {v}, distance {distance_v}')
+        #print(f'edge {u} -> {v}, distance {distance_v}')
 
         mid_point = mid_point or numpy.add(u, distance_v / 2)
         mid_point_anchor_adjust = numpy.multiply(out_v, anchor_size / 16)
@@ -373,13 +373,13 @@ class CimbarScanner:
 
             state = EdgeScanState()
             i, j = 0, 0
-            while int(i) != check[0] and int(j) != check[1]:
+            while not (int(i) == check[0] and int(j) == check[1]):
                 x = int(mid_point[0] + i)
                 y = int(mid_point[1] + j)
                 active = self._test_pixel(x, y)
                 size = state.process(active)
                 if size:
-                    # print(f'found something at {x}, {y}. {i}, {j}. {size}')
+                    #print(f'found something at {x}, {y}. {i}, {j}. {size}')
                     edge = numpy.subtract((x, y), (unit*size)/2).astype(int)
                     if self.chase_edge(edge, distance_unit):
                         return edge[0], edge[1]
