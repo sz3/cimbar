@@ -57,7 +57,7 @@ class ScanState:
     def evaluate_state(self, leniency):
         if self.state != 6:
             return None
-        # ratio should be 1:1:3:1:1
+        # ratio should be 1:1:4:1:1
         ones = self.tally[1:6]
         for s in ones:
             if not s:
@@ -65,7 +65,7 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < leniency or ratio > 5.5:
+            if ratio < leniency or ratio > 6:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
@@ -84,6 +84,7 @@ class ScanState:
                 return res
             return None
 
+        # not is_transition
         if self.state in [1, 3, 5] and active:
             self.tally[-1] += 1
         if self.state in [2, 4] and not active:
@@ -121,7 +122,7 @@ class EdgeScanState:
 
 def _the_works(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img,(17,17),0)
+    img = cv2.GaussianBlur(img,(17,17),0)  # scale blur by image width/height?
     clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
     img = clahe.apply(img)
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
@@ -185,7 +186,7 @@ class CimbarScanner:
 
     def horizontal_scan(self, y):
         # print('horizontal scan at {}'.format(y))
-        # for each column, look for the 1:1:3:1:1 pattern
+        # for each column, look for the 1:1:4:1:1 pattern
         state = ScanState()
         for x in range(self.width):
             active = self._test_pixel(x, y)
@@ -221,28 +222,40 @@ class CimbarScanner:
             yield Anchor(x=x, y=y-res, ymax=y-1)
 
     def diagonal_scan(self, start_x, end_x, start_y, end_y):
-        start_x = max(0, start_x)
-        start_y = max(0, start_y)
         end_x = min(self.width, end_x)
         end_y = min(self.height, end_y)
+
+        # if we're up against the top/left bounds, invert the scan direction
+        xdir = 1
+        ydir = 1
+        if start_x < 0:
+            start_x = end_x
+            end_x = 0
+            xdir = -1
+        if start_y < 0:
+            start_y = end_y
+            end_y = 0
+            ydir = -1
 
         # print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
         state = ScanState()
         x = start_x
         y = start_y
-        while x < self.width and y < self.height:
+        while 0 <= x < self.width and 0 <= y < self.height:
             active = self._test_pixel(x, y)
             #if (target_x, target_y) == (346, 3005):
             #    print(f'{x},{y} == {active}')
             #if (x, y) == (394,3053):
             #    print(f'{state.tally}')
-            res = state.process(active, leniency=3.0)
+            res = state.process(active, leniency=2.0)
             if res:
-                print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
-                yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
-            x += 1
-            y += 1
+                ax, axmax = (x-res, x) if xdir > 0 else (x, x+res)
+                ay, aymax = (y-res, y) if ydir > 0 else (y, y+res)
+                print('confirmed anchor at {}-{},{}-{}'.format(ax, axmax, ay, aymax))
+                yield Anchor(x=ax, xmax=axmax, y=ay, ymax=aymax)
+            x += xdir
+            y += ydir
 
          # if the pattern is at the edge of the image
         res = state.process(False)
@@ -269,7 +282,7 @@ class CimbarScanner:
         '''
         results = []
         for p in candidates:
-            range_guess = (p.y - (2 * p.xrange), p.y + (2 * p.xrange))
+            range_guess = (p.y - (3 * p.xrange), p.y + (3 * p.xrange))
             results += list(self.vertical_scan(p.xavg, range_guess))
         return self.deduplicate_candidates(results)
 
@@ -376,10 +389,14 @@ class CimbarScanner:
             while abs(i) <= abs(check[0]) and abs(j) <= abs(check[1]):
                 x = int(mid_point[0] + i)
                 y = int(mid_point[1] + j)
+                if x < 0 or x >= self.width or y < 0 or y >= self.height:
+                    i += unit[0]
+                    j += unit[1]
+                    continue
                 active = self._test_pixel(x, y)
                 size = state.process(active)
                 if size:
-                    #print(f'found something at {x}, {y}. {i}, {j}. {size}')
+                    #print(f' found edge at {x}, {y}. {i}, {j}. {size}')
                     edge = numpy.subtract((x, y), (unit*size)/2).astype(int)
                     if self.chase_edge(edge, distance_unit):
                         return edge[0], edge[1]
