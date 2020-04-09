@@ -11,7 +11,7 @@ ED_DIST = 4
 
 
 def correct_perspective(img, target_size, input_pts, output_pts):
-    transformer, _ = cv2.findHomography(numpy.float32(input_pts), numpy.float32(output_pts))
+    transformer = cv2.getPerspectiveTransform(numpy.float32(input_pts), numpy.float32(output_pts))
     return cv2.warpPerspective(img, transformer, target_size)
 
 
@@ -107,12 +107,6 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
         (anchor_size, anchor_size), (size-anchor_size, anchor_size),
         (size-anchor_size, size-anchor_size), (anchor_size, size-anchor_size)
     ]
-    if align.edges:
-        mid = size // 2
-        for p, outP in zip(align.edges, [(mid, ED_DIST), (size-ED_DIST, mid), (mid, size-ED_DIST), (ED_DIST, mid)]):
-            if p:
-                input_pts.append(p)
-                output_pts.append(outP)
 
     out = correct_perspective(img, (size, size), input_pts, output_pts)
     cv2.imwrite(dst_image, out)

@@ -21,7 +21,7 @@ Options:
   --src_image=<filename>           For decoding. Image to try to decode
   --dark                           Use inverted palette.
   --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 10]
-  --deskew=<0-3>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 3]
+  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -50,13 +50,12 @@ def get_deskew_params(level):
     level = int(level)
     return {
         'deskew': level,
-        'partial_deskew': level <= 1,
-        'auto_dewarp': level >= 3,
+        'auto_dewarp': level >= 2,
     }
 
 
-def detect_and_deskew(src_image, temp_image, dark, partial_deskew=False, auto_dewarp=True):
-    deskewer(src_image, temp_image, dark, use_edges=not partial_deskew, auto_dewarp=auto_dewarp)
+def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
+    deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
 
 
 def _decode_cell(ct, img, x, y, drift):
@@ -77,12 +76,12 @@ def _decode_cell(ct, img, x, y, drift):
     return best_bits + ct.decode_color(best_cell), best_dx, best_dy
 
 
-def decode_iter(src_image, dark, deskew, partial_deskew, auto_dewarp):
+def decode_iter(src_image, dark, deskew, auto_dewarp):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img, dark, partial_deskew, auto_dewarp)
+        detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
         img = Image.open(temp_img)
     else:
         img = Image.open(src_image)
@@ -99,10 +98,10 @@ def decode_iter(src_image, dark, deskew, partial_deskew, auto_dewarp):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, partial_deskew=False, auto_dewarp=True):
+def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, auto_dewarp=True):
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, bit_file(outstream, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, deskew, partial_deskew, auto_dewarp):
+        for bits in decode_iter(src_image, dark, deskew, auto_dewarp):
             f.write(bits)
 
 

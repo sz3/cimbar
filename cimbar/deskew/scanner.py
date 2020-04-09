@@ -248,7 +248,7 @@ class CimbarScanner:
             #    print(f'{x},{y} == {active}')
             #if (x, y) == (394,3053):
             #    print(f'{state.tally}')
-            res = state.process(active, leniency=2.0)
+            res = state.process(active)
             if res:
                 ax, axmax = (x-res, x) if xdir > 0 else (x, x+res)
                 ay, aymax = (y-res, y) if ydir > 0 else (y, y+res)
