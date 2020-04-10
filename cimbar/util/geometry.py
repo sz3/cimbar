@@ -40,8 +40,8 @@ def calculate_midpoints(sq):
     bottom = (sq.bottom_left, sq.bottom_right)
     horizontal = (center, line_intersection(top, bottom))
 
-    tmid = line_intersection(top, vertical)
-    bmid = line_intersection(bottom, vertical)
-    lmid = line_intersection(left, horizontal)
-    rmid = line_intersection(right, horizontal)
+    tmid = line_intersection(top, vertical) if vertical[1] else (center[0], sq.top_left[1])
+    bmid = line_intersection(bottom, vertical) if vertical[1] else (center[0], sq.bottom_left[1])
+    lmid = line_intersection(left, horizontal) if horizontal[1] else (sq.top_left[0], center[1])
+    rmid = line_intersection(right, horizontal) if horizontal[1] else (sq.top_right[0], center[1])
     return Midpoints(tmid, rmid, bmid, lmid)

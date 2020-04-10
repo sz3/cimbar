@@ -57,7 +57,7 @@ class ScanState:
     def evaluate_state(self, leniency):
         if self.state != 6:
             return None
-        # ratio should be 1:1:3:1:1
+        # ratio should be 1:1:4:1:1
         ones = self.tally[1:6]
         for s in ones:
             if not s:
@@ -65,7 +65,7 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < leniency or ratio > 5.5:
+            if ratio < leniency or ratio > 6:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
@@ -84,6 +84,7 @@ class ScanState:
                 return res
             return None
 
+        # not is_transition
         if self.state in [1, 3, 5] and active:
             self.tally[-1] += 1
         if self.state in [2, 4] and not active:
@@ -121,7 +122,7 @@ class EdgeScanState:
 
 def _the_works(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img,(17,17),0)
+    img = cv2.GaussianBlur(img,(17,17),0)  # scale blur by image width/height?
     clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
     img = clahe.apply(img)
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
@@ -129,12 +130,42 @@ def _the_works(img):
 
 
 class CimbarAlignment:
-    def __init__(self, four_corners):
-        self.four_corners = four_corners
-        self.top_left = four_corners[0]
-        self.top_right = four_corners[1]
-        self.bottom_left = four_corners[2]
-        self.bottom_right = four_corners[3]
+    def __init__(self, corners, edges=[], midpoints=[]):
+        self.corners = corners
+        self.edges = edges
+        self.midpoints = midpoints
+
+    @property
+    def top_left(self):
+        return self.corners[0]
+
+    @property
+    def top_right(self):
+        return self.corners[1]
+
+    @property
+    def bottom_left(self):
+        return self.corners[2]
+
+    @property
+    def bottom_right(self):
+        return self.corners[3]
+
+    @property
+    def top_mid(self):
+        return self.midpoints[0]
+
+    @property
+    def right_mid(self):
+        return self.midpoints[1]
+
+    @property
+    def bottom_mid(self):
+        return self.midpoints[2]
+
+    @property
+    def left_mid(self):
+        return self.midpoints[3]
 
 
 class CimbarScanner:
@@ -155,7 +186,7 @@ class CimbarScanner:
 
     def horizontal_scan(self, y):
         # print('horizontal scan at {}'.format(y))
-        # for each column, look for the 1:1:3:1:1 pattern
+        # for each column, look for the 1:1:4:1:1 pattern
         state = ScanState()
         for x in range(self.width):
             active = self._test_pixel(x, y)
@@ -191,28 +222,40 @@ class CimbarScanner:
             yield Anchor(x=x, y=y-res, ymax=y-1)
 
     def diagonal_scan(self, start_x, end_x, start_y, end_y):
-        start_x = max(0, start_x)
-        start_y = max(0, start_y)
         end_x = min(self.width, end_x)
         end_y = min(self.height, end_y)
+
+        # if we're up against the top/left bounds, invert the scan direction
+        xdir = 1
+        ydir = 1
+        if start_x < 0:
+            start_x = end_x
+            end_x = 0
+            xdir = -1
+        if start_y < 0:
+            start_y = end_y
+            end_y = 0
+            ydir = -1
 
         # print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
         state = ScanState()
         x = start_x
         y = start_y
-        while x < self.width and y < self.height:
+        while 0 <= x < self.width and 0 <= y < self.height:
             active = self._test_pixel(x, y)
             #if (target_x, target_y) == (346, 3005):
             #    print(f'{x},{y} == {active}')
             #if (x, y) == (394,3053):
             #    print(f'{state.tally}')
-            res = state.process(active, leniency=3.0)
+            res = state.process(active)
             if res:
-                print('confirmed anchor at {}-{},{}-{}'.format(x-res, x, y-res, y))
-                yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
-            x += 1
-            y += 1
+                ax, axmax = (x-res, x) if xdir > 0 else (x, x+res)
+                ay, aymax = (y-res, y) if ydir > 0 else (y, y+res)
+                print('confirmed anchor at {}-{},{}-{}'.format(ax, axmax, ay, aymax))
+                yield Anchor(x=ax, xmax=axmax, y=ay, ymax=aymax)
+            x += xdir
+            y += ydir
 
          # if the pattern is at the edge of the image
         res = state.process(False)
@@ -239,7 +282,7 @@ class CimbarScanner:
         '''
         results = []
         for p in candidates:
-            range_guess = (p.y - (2 * p.xrange), p.y + (2 * p.xrange))
+            range_guess = (p.y - (3 * p.xrange), p.y + (3 * p.xrange))
             results += list(self.vertical_scan(p.xavg, range_guess))
         return self.deduplicate_candidates(results)
 
@@ -312,8 +355,7 @@ class CimbarScanner:
         print(t2_candidates)
         print(t3_candidates)
 
-        align = CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
-        return align
+        return CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
@@ -322,7 +364,6 @@ class CimbarScanner:
             x = start[0] + int(unit[0] * i)
             y = start[1] + int(unit[1] * i)
             active = self._test_pixel(x, y)
-            print(f'testing at {x},{y} == {active}')
             if active:
                 success += 1
         return success >= 2
@@ -332,46 +373,45 @@ class CimbarScanner:
         distance_v = numpy.subtract(v, u)
         distance_unit = distance_v / 512
         out_v = (distance_v[1] // 64, -distance_v[0] // 64)
-        print(f'edge {u} -> {v}, distance {distance_v}')
+        #print(f'edge {u} -> {v}, distance {distance_v}')
 
         mid_point = mid_point or numpy.add(u, distance_v / 2)
         mid_point_anchor_adjust = numpy.multiply(out_v, anchor_size / 16)
         mid_point += mid_point_anchor_adjust
-        print(f'out_v {out_v}, mid_point {mid_point}, anchor adjust: {mid_point_anchor_adjust}')
 
         in_v = (-out_v[0], -out_v[1])
         for check in (out_v, in_v):
             max_check = max(abs(check[0]), abs(check[1]))
             unit = check / max_check
-            print(f'checking: {unit} {max_check}')
 
             state = EdgeScanState()
             i, j = 0, 0
-            while int(i) != check[0] and int(j) != check[1]:
+            while abs(i) <= abs(check[0]) and abs(j) <= abs(check[1]):
                 x = int(mid_point[0] + i)
                 y = int(mid_point[1] + j)
+                if x < 0 or x >= self.width or y < 0 or y >= self.height:
+                    i += unit[0]
+                    j += unit[1]
+                    continue
                 active = self._test_pixel(x, y)
                 size = state.process(active)
                 if size:
-                    print(f'found something at {x}, {y}. {i}, {j}. {size}')
+                    #print(f' found edge at {x}, {y}. {i}, {j}. {size}')
                     edge = numpy.subtract((x, y), (unit*size)/2).astype(int)
                     if self.chase_edge(edge, distance_unit):
                         return edge[0], edge[1]
                 i += unit[0]
                 j += unit[1]
+        #print(' ... no edge?!?!?')
         return None
 
     def scan_edges(self, align, anchor_size):
         mp = calculate_midpoints(align)
-        print(f'mid top: {mp.top}')
         bounds = [
             (align.top_left, align.top_right, mp.top),
             (align.top_right, align.bottom_right, mp.right),
             (align.bottom_right, align.bottom_left, mp.bottom),
             (align.bottom_left, align.top_left, mp.left),
         ]
-        edges = []
-        for start, end, mid in bounds:
-            res = self.find_edge(start, end, mid, anchor_size)
-            edges.append(res)
-        return edges
+        edges = [self.find_edge(start, end, mid, anchor_size) for start, end, mid in bounds]
+        return CimbarAlignment(align.corners, edges, mp)
