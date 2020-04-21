@@ -4,7 +4,7 @@
 
 Usage:
   ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark]
-              [--deskew=<0-3>] [--ecc=<0-100>]
+              [--deskew=<0-2>] [--ecc=<0-100>]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark] [--ecc=<0-100>]
   ./cimbar.py (-h | --help)
 
