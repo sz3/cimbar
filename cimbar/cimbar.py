@@ -109,13 +109,22 @@ def _get_image_template(width, dark):
     color = (0, 0, 0) if dark else (255, 255, 255)
     img = Image.new('RGB', (width, width), color=color)
 
+    ce = CimbEncoder(dark, BITS_PER_SYMBOL)
+
     suffix = 'dark' if dark else 'light'
     anchor = Image.open(f'bitmap/anchor-{suffix}.png')
     aw, ah = anchor.size
     img.paste(anchor, (0, 0))
+
+    anchor = Image.open(f'bitmap/round-{suffix}.png')
     img.paste(anchor, (0, width-ah))
+    img.paste(ce.encode(6), (aw - 7, width-ah - 1))
+
     img.paste(anchor, (width-aw, 0))
+    img.paste(ce.encode(6), (width-aw - 2, ah - 6))
+
     img.paste(anchor, (width-aw, width-ah))
+    img.paste(ce.encode(6), (width-aw - 2, width-ah - 1))
 
     horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
     gw, _ = horizontal_guide.size
