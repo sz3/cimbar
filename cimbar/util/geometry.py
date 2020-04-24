@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 
-Square = namedtuple('Square', 'top_left top_right bottom_left bottom_right')
 Midpoints = namedtuple('Midpoints', 'top right bottom left')
 
 

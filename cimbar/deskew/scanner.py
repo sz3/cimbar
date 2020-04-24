@@ -225,37 +225,31 @@ class CimbarScanner:
         end_x = min(self.width, end_x)
         end_y = min(self.height, end_y)
 
-        # if we're up against the top/left bounds, invert the scan direction
-        xdir = 1
-        ydir = 1
+        # if we're up against the top/left bounds, roll the scan forward until we're inside the bounds
         if start_x < 0:
-            start_x = end_x
-            end_x = 0
-            xdir = -1
+            offset = -start_x
+            start_x += offset
+            start_y += offset
         if start_y < 0:
-            start_y = end_y
-            end_y = 0
-            ydir = -1
+            offset = -start_y
+            start_x += offset
+            start_y += offset
 
         # print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
         state = ScanState()
         x = start_x
         y = start_y
-        while 0 <= x < self.width and 0 <= y < self.height:
+        while x < end_x and y < end_y:
             active = self._test_pixel(x, y)
-            #if (target_x, target_y) == (346, 3005):
-            #    print(f'{x},{y} == {active}')
-            #if (x, y) == (394,3053):
-            #    print(f'{state.tally}')
             res = state.process(active)
             if res:
-                ax, axmax = (x-res, x) if xdir > 0 else (x, x+res)
-                ay, aymax = (y-res, y) if ydir > 0 else (y, y+res)
+                ax, axmax = (x-res, x)
+                ay, aymax = (y-res, y)
                 print('confirmed anchor at {}-{},{}-{}'.format(ax, axmax, ay, aymax))
                 yield Anchor(x=ax, xmax=axmax, y=ay, ymax=aymax)
-            x += xdir
-            y += ydir
+            x += 1
+            y += 1
 
          # if the pattern is at the edge of the image
         res = state.process(False)
