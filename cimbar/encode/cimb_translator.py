@@ -205,7 +205,7 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     112 * 8
     '''
     #cells = dimensions * dimensions
-    offset_y = offset + 1
+    offset_y = offset
     marker_offset_x = spacing * marker_size
     top_width = dimensions - marker_size - marker_size
     top_cells = top_width * marker_size
