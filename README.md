@@ -1,3 +1,9 @@
+Encoding:
+
+```
+python -m cimbar.cimbar --encode --dark myinputfile.txt /tmp/encoded.png
+```
+
 The grader:
 
 ```
