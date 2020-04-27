@@ -15,8 +15,11 @@ def correct_perspective(img, target_size, input_pts, output_pts):
     return cv2.warpPerspective(img, transformer, target_size)
 
 
-def _naive_undistort(img, distortion_factor):
+def _naive_radial_undistort(img, distortion_factor):
     '''
+    This is a "works on my box" kind of function. Ideally this is a last resort (or entirely unnecessary),
+    because we'll have the lens distortion parameters cached.
+
     distortion factor calculated by _get_distortion_factor()
     '''
     height, width = img.shape[:2]
@@ -24,15 +27,15 @@ def _naive_undistort(img, distortion_factor):
     print(f'{height},{width}, ... {distortion_factor}')
 
     distCoeff = numpy.zeros((4,1),numpy.float64)
-    distCoeff[0,0] = distortion_factor    # ex: -0.0043366581750921215
-    distCoeff[1,0] = 0.0
-    distCoeff[2,0] = 0.0
+    distCoeff[0,0] = distortion_factor    # k1. ex: -0.0043366581750921215
+    distCoeff[1,0] = 0.0 # k2. 0
+    distCoeff[2,0] = 0.0 # tangential distortion coefficients are 0
     distCoeff[3,0] = 0.0
 
     cam = numpy.eye(3, dtype=numpy.float32)
-    cam[0,2] = width / 2
-    cam[1,2] = height / 2
-    cam[0,0] = 925.
+    cam[0,2] = width / 2   #  center of distortion X -- assumed to be center of image
+    cam[1,2] = height / 2  #  center of distortion Y
+    cam[0,0] = 925.  # "good enough" focal length
     cam[1,1] = 925.
 
     return cv2.undistort(img, cam, distCoeff)
@@ -74,7 +77,7 @@ def _get_distortion_factor(align, target_ratio):
 def fix_lens_distortion(img, dest_size, anchor_size, align):
     target_ratio = _edge_to_anchor_ratio(dest_size, anchor_size)
     df = _get_distortion_factor(align, target_ratio)
-    return _naive_undistort(img, df)
+    return _naive_radial_undistort(img, df)
 
 
 def scan(img, dark, use_edges, size, anchor_size):
