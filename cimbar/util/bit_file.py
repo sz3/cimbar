@@ -46,4 +46,4 @@ class bit_file:
         return bits
 
     def save(self):
-        self.stream.tofile(self.f)
+        self.f.write(self.stream.tobytes())
