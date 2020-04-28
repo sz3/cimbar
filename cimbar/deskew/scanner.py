@@ -121,7 +121,8 @@ class EdgeScanState:
 
 
 def _the_works(img):
-    unit = int(min(img.shape[0], img.shape[1]) * 0.05)
+    x = int(min(img.shape[0], img.shape[1]) * 0.05)
+    unit = 2**((x - 1).bit_length() - 1) + 1  # closest (floor) power of 2, + 1
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, unit, 0);
     return img
