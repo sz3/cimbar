@@ -54,7 +54,7 @@ class ScanState:
         self.state -= 2
         self.tally = self.tally[2:]
 
-    def evaluate_state(self, leniency):
+    def evaluate_state(self, limit_low, limit_high):
         if self.state != 6:
             return None
         # ratio should be 1:1:4:1:1
@@ -65,12 +65,12 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio = center / s
-            if ratio < leniency or ratio > 6:
+            if ratio < limit_low or ratio > limit_high:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
 
-    def process(self, active, leniency=3.0):
+    def process(self, active, limit_low=3.0, limit_high=6.0):
         # transitions first
         is_transition = (self.state in [0, 2, 4] and active) or (self.state in [1, 3, 5] and not active)
         if is_transition:
@@ -79,7 +79,7 @@ class ScanState:
             self.tally[-1] += 1
 
             if self.state == 6:
-                res = self.evaluate_state(leniency)
+                res = self.evaluate_state(limit_low, limit_high)
                 self.pop_state()
                 return res
             return None
@@ -242,7 +242,7 @@ class CimbarScanner:
         y = start_y
         while x < end_x and y < end_y:
             active = self._test_pixel(x, y)
-            res = state.process(active)
+            res = state.process(active, limit_high=8.0)
             if res:
                 ax, axmax = (x-res, x)
                 ay, aymax = (y-res, y)
