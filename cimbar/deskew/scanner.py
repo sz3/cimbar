@@ -121,11 +121,9 @@ class EdgeScanState:
 
 
 def _the_works(img):
+    unit = int(min(img.shape[0], img.shape[1]) * 0.05)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img,(17,17),0)  # scale blur by image width/height?
-    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
-    img = clahe.apply(img)
-    _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, unit, 0);
     return img
 
 
