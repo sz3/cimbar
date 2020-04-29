@@ -81,7 +81,7 @@ def fix_lens_distortion(img, dest_size, anchor_size, align):
 
 
 def scan(img, dark, use_edges, size, anchor_size):
-    cs = CimbarScanner(img, dark, 17)
+    cs = CimbarScanner(img, dark)
     align = cs.scan()
     if len(align.corners) < 4:
         return None
