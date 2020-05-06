@@ -64,8 +64,9 @@ class ScanState:
                 return None
         center = ones.pop(2)
         for s in ones:
-            ratio = center / s
-            if ratio < limit_low or ratio > limit_high:
+            ratio_min = center / (s + 1)
+            ratio_max = center / s
+            if ratio_max < limit_low or ratio_min > limit_high:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
@@ -121,8 +122,11 @@ class EdgeScanState:
 
 
 def _the_works(img):
+    x = int(min(img.shape[0], img.shape[1]) * 0.002)
+    unit = 2**((x - 1).bit_length()) + 1  # closest (ceiling) power of 2, + 1
+    unit = max(3, unit)  # needs to be at least 3
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img,(17,17),0)  # scale blur by image width/height?
+    img = cv2.GaussianBlur(img,(unit,unit),0)
     clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
     img = clahe.apply(img)
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
@@ -185,7 +189,7 @@ class CimbarScanner:
             return self.img[y, x] < 127
 
     def horizontal_scan(self, y):
-        # print('horizontal scan at {}'.format(y))
+        #print('horizontal scan at {}'.format(y))
         # for each column, look for the 1:1:4:1:1 pattern
         state = ScanState()
         for x in range(self.width):
@@ -201,25 +205,28 @@ class CimbarScanner:
             x = self.width
             yield Anchor(x=x-res, xmax=x-1, y=y)
 
-    def vertical_scan(self, x, r=None):
-        state = ScanState()
+    def vertical_scan(self, x, xmax=None, r=None):
+        xmax = xmax or x
+        xavg = (x + xmax) // 2
         if r:
             r = (max(r[0], 0), min(r[1], self.height))
-            # print(f'vertically scanning {x} from {r} instead of all the way to {self.height}')
+            # print(f'vertically scanning {xavg} from {r} instead of all the way to {self.height}')
         else:
             r = (0, self.height)
+
+        state = ScanState()
         for y in range(*r):
-            active = self._test_pixel(x, y)
+            active = self._test_pixel(xavg, y)
             res = state.process(active)
             if res:
-                #print('found possible anchor at {},{}-{}'.format(x, y-res, y))
-                yield Anchor(x=x, y=y-res, ymax=y-1)
+                #print('found possible anchor at {},{}-{}'.format(xavg, y-res, y))
+                yield Anchor(x=x, xmax=xmax, y=y-res, ymax=y-1)
 
          # if the pattern is at the edge of the image
         res = state.process(False)
         if res:
             y = self.height
-            yield Anchor(x=x, y=y-res, ymax=y-1)
+            yield Anchor(x=x, xmax=xmax, y=y-res, ymax=y-1)
 
     def diagonal_scan(self, start_x, end_x, start_y, end_y):
         end_x = min(self.width, end_x)
@@ -235,7 +242,7 @@ class CimbarScanner:
             start_x += offset
             start_y += offset
 
-        # print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
+        #print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
         state = ScanState()
         x = start_x
@@ -268,7 +275,7 @@ class CimbarScanner:
                 y = y % self.height
             results += list(self.horizontal_scan(y))
             y += self.skip
-        return self.deduplicate_candidates(results)
+        return results
 
     def t2_scan_vertical(self, candidates):
         '''
@@ -277,8 +284,8 @@ class CimbarScanner:
         results = []
         for p in candidates:
             range_guess = (p.y - (3 * p.xrange), p.y + (3 * p.xrange))
-            results += list(self.vertical_scan(p.xavg, range_guess))
-        return self.deduplicate_candidates(results)
+            results += list(self.vertical_scan(p.x, p.xmax, range_guess))
+        return results
 
     def t3_scan_diagonal(self, candidates):
         '''
@@ -286,7 +293,7 @@ class CimbarScanner:
         '''
         results = []
         for p in candidates:
-            range_guess = (p.x - (2 * p.yrange), p.x + (2 * p.yrange), p.y - p.yrange, p.ymax + p.yrange)
+            range_guess = (p.xavg - (2 * p.yrange), p.xavg + (2 * p.yrange), p.y - p.yrange, p.ymax + p.yrange)
             results += list(self.diagonal_scan(*range_guess))
         return self.deduplicate_candidates(results)
 
@@ -311,7 +318,7 @@ class CimbarScanner:
             for p in c:
                 area.merge(p)
             average.append(area)
-        return self.filter_candidates(average)
+        return average
 
     def filter_candidates(self, candidates):
         if len(candidates) <= 4:
@@ -325,7 +332,7 @@ class CimbarScanner:
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
 
-        return [c for c in candidates if c.xrange > xrange / 2 and c.yrange > yrange / 2]
+        return [c for c in candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
 
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
@@ -349,7 +356,8 @@ class CimbarScanner:
         print(t2_candidates)
         print(t3_candidates)
 
-        return CimbarAlignment(self.sort_top_to_bottom(t3_candidates))
+        filtered_candidates = self.filter_candidates(t3_candidates)
+        return CimbarAlignment(self.sort_top_to_bottom(filtered_candidates))
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
