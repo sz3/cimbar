@@ -249,7 +249,7 @@ class CimbarScanner:
         y = start_y
         while x < end_x and y < end_y:
             active = self._test_pixel(x, y)
-            res = state.process(active, limit_high=8.0)
+            res = state.process(active)
             if res:
                 ax, axmax = (x-res, x)
                 ay, aymax = (y-res, y)
