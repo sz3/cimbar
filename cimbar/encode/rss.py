@@ -6,7 +6,7 @@ class reed_solomon_stream:
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
         self.mode = mode
-        self.rsc = RSCodec(ec, nsize=chunk_size)
+        self.rsc = RSCodec(ec, nsize=chunk_size, fcr=1, prim=0x187)
 
         if isinstance(f, str):
             fmode = 'wb' if mode == 'write' else 'rb'
