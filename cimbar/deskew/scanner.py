@@ -345,7 +345,25 @@ class CimbarScanner:
             candidates = [top_left, p2, p1, candidates[3]]
         return [(p.xavg, p.yavg) for p in candidates]
 
-    def scan(self):
+    def rotate_to_top_left(self, top_left, pts):
+        # input will be:
+        # 0: "top left"
+        # 1: "top right"
+        # 2: "bottom left"
+        # 3: "bottom right"
+        # however, these are calculated presuming the image is right-side up.
+
+        if not top_left or top_left == pts[0]:
+            return pts
+
+        if pts[1] == top_left:
+            return [pts[1], pts[3], pts[0], pts[2]]
+        elif pts[2] == top_left:
+            return [pts[2], pts[0], pts[3], pts[1]]
+        elif pts[3] == top_left:
+            return [pts[3], pts[2], pts[1], pts[0]]
+
+    def scan(self, anchor_size):
         # do these need to track all known ranges, so we can approximate bounding lines?
         # also not clear if we should dedup at every step or not
         candidates = self.t1_scan_horizontal()
@@ -355,9 +373,15 @@ class CimbarScanner:
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
-
         filtered_candidates = self.filter_candidates(t3_candidates)
-        return CimbarAlignment(self.sort_top_to_bottom(filtered_candidates))
+
+        # sort in order: top left, top right, bottom left, bottom right
+        top_to_bottom = self.sort_top_to_bottom(filtered_candidates)
+
+        # rotate to real top left, if we can find it
+        top_left = self.find_top_left(top_to_bottom, anchor_size)
+        top_to_bottom = self.rotate_to_top_left(top_left, top_to_bottom)
+        return CimbarAlignment(top_to_bottom)
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
@@ -417,3 +441,53 @@ class CimbarScanner:
         ]
         edges = [self.find_edge(start, end, mid, anchor_size) for start, end, mid in bounds]
         return CimbarAlignment(align.corners, edges, mp)
+
+    def _get_out_vectors(self, u, v):
+        # we're going clockwise -- "out" is 90 degrees left
+        distance_v = numpy.subtract(v, u)
+
+        # we want to check 1/5th of an anchor width/height from the outside edge and sample some pixels
+        out_min = (distance_v[1] // 40, -distance_v[0] // 40)  # ~6px from edge ... 24px on a 1024x1024 w/ 30px anchor
+        out_max = (distance_v[1] // 35, -distance_v[0] // 35)  # ~3px from edge ... 27px ''
+        return out_min, out_max
+
+    def check_corner(self, corner, line_in, line_out):
+        imin, imax = self._get_out_vectors(*line_in)
+        omin, omax = self._get_out_vectors(*line_out)
+
+        corn = (corner[0], corner[1])
+        corner_min = numpy.add(corn, imin) + omin
+        corner_max = numpy.add(corn, imax) + omax
+        #print(f'corner: {corn}, {corner_min}, {corner_max}... {imin},{imax} to {omin},{omax}')
+
+        # maybe just get mean of image from min to max?
+        xmin = min(corner_min[0], corner_max[0])
+        xmax = max(corner_min[0], corner_max[0])
+        ymin = min(corner_min[1], corner_max[1])
+        ymax = max(corner_min[1], corner_max[1])
+        corner_img = self.img[ymin:ymax, xmin:xmax]
+
+        channels = cv2.mean(corner_img)
+        #print(f'big mean {channels}')
+        if self.dark:
+            return channels[0] > 127
+        else:
+            return channels[0] < 127
+
+    def find_top_left(self, candidates, anchor_size):
+        bounds = [
+            (candidates[0], candidates[1]),
+            (candidates[1], candidates[3]),
+            (candidates[3], candidates[2]),
+            (candidates[2], candidates[0]),
+        ]
+        corners = [
+            (candidates[0], bounds[3], bounds[0]),
+            (candidates[1], bounds[0], bounds[1]),
+            (candidates[3], bounds[1], bounds[2]),
+            (candidates[2], bounds[2], bounds[3]),
+        ]
+        for c, li, lo in corners:
+            if self.check_corner(c, li, lo):
+                return c
+        return None
