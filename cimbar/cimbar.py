@@ -115,7 +115,10 @@ def _get_image_template(width, dark):
     img.paste(anchor, (0, 0))
     img.paste(anchor, (0, width-ah))
     img.paste(anchor, (width-aw, 0))
-    img.paste(anchor, (width-aw, width-ah))
+
+    anchor = Image.open(f'bitmap/small-{suffix}.png')
+    smolw, smolh = anchor.size
+    img.paste(anchor, (width-(aw+smolw)//2, width-(ah+smolh)//2))
 
     horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
     gw, _ = horizontal_guide.size
