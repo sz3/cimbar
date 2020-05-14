@@ -119,13 +119,13 @@ def _get_image_template(width, dark):
 
     horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
     gw, _ = horizontal_guide.size
-    img.paste(horizontal_guide, (width//2 - gw//2, 3))
-    img.paste(horizontal_guide, (width//2 - gw//2, width-5))
+    img.paste(horizontal_guide, (width//2 - gw//2, 2))
+    img.paste(horizontal_guide, (width//2 - gw//2, width-4))
 
     vertical_guide = Image.open(f'bitmap/guide-vertical-{suffix}.png')
     _, gh = vertical_guide.size
-    img.paste(vertical_guide, (3, width//2 - gw//2))
-    img.paste(vertical_guide, (width-5, width//2 - gw//2))
+    img.paste(vertical_guide, (2, width//2 - gw//2))
+    img.paste(vertical_guide, (width-4, width//2 - gw//2))
     return img
 
 
