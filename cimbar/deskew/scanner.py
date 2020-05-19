@@ -173,10 +173,8 @@ class CimbarAlignment:
 
 
 class CimbarScanner:
-    def __init__(self, img, dark=False, skip=17):
-        '''
-        image dimensions need to not be divisible by skip
-        '''
+    def __init__(self, img, dark=False, skip=9):
+        # should skip be based on img.height? probably...
         self.img = _the_works(img)
         self.height, self.width = self.img.shape
         self.dark = dark
