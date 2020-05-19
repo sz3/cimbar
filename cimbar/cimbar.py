@@ -121,6 +121,8 @@ def _get_image_template(width, dark):
     gw, _ = horizontal_guide.size
     img.paste(horizontal_guide, (width//2 - gw//2, 2))
     img.paste(horizontal_guide, (width//2 - gw//2, width-4))
+    img.paste(horizontal_guide, (width//2 - gw - gw//2, width-4))  # long bottom guide
+    img.paste(horizontal_guide, (width//2 + gw - gw//2, width-4))  # ''
 
     vertical_guide = Image.open(f'bitmap/guide-vertical-{suffix}.png')
     _, gh = vertical_guide.size
