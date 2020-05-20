@@ -3,9 +3,9 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark]
+  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark | --light]
               [--deskew=<0-2>] [--ecc=<0-100>]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark] [--ecc=<0-100>]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light] [--ecc=<0-100>]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -19,7 +19,8 @@ Options:
   --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
   --src_image=<filename>           For decoding. Image to try to decode
-  --dark                           Use inverted palette.
+  --dark                           Use dark palette. [default]
+  --light                          Use light palette.
   --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 10]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
 """
@@ -149,9 +150,9 @@ def encode(src_data, dst_image, dark=False, ecc=ECC):
 
 
 def main():
-    args = docopt(__doc__, version='CIMBar 0.0.1')
+    args = docopt(__doc__, version='cimbar 0.0.2')
 
-    dark = args['--dark']
+    dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
 
     if args['--encode']:
