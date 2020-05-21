@@ -27,16 +27,16 @@ def _naive_radial_undistort(img, distortion_factor):
     print(f'{height},{width}, ... {distortion_factor}')
 
     distCoeff = numpy.zeros((4,1),numpy.float64)
-    distCoeff[0,0] = distortion_factor    # k1. ex: -0.0043366581750921215
-    distCoeff[1,0] = 0.0 # k2. 0
+    distCoeff[0,0] = distortion_factor  # k1. ex: -0.0043366581750921215
+    distCoeff[1,0] = 0 # k2. 0
     distCoeff[2,0] = 0.0 # tangential distortion coefficients are 0
     distCoeff[3,0] = 0.0
 
     cam = numpy.eye(3, dtype=numpy.float32)
     cam[0,2] = width / 2   #  center of distortion X -- assumed to be center of image
     cam[1,2] = height / 2  #  center of distortion Y
-    cam[0,0] = 925.  # "good enough" focal length
-    cam[1,1] = 925.
+    cam[0,0] = width / 4  # "good enough" focal length
+    cam[1,1] = height / 4
 
     return cv2.undistort(img, cam, distCoeff)
 
@@ -90,6 +90,12 @@ def scan(img, dark, use_edges, size, anchor_size):
     return align
 
 
+def sharpen(img):
+    ''' only if new dimensions are > old? '''
+    kernel = numpy.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    return cv2.filter2D(img, -1, kernel)
+
+
 def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, anchor_size=30):
     from cimbar.cimbar import TOTAL_SIZE
     size = TOTAL_SIZE
@@ -112,4 +118,8 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
     ]
 
     out = correct_perspective(img, (size, size), input_pts, output_pts)
+
+    src_w, src_h = img.shape[0], img.shape[1]
+    if src_w < size or src_h < size:
+        out = sharpen(out)
     cv2.imwrite(dst_image, out)
