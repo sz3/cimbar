@@ -88,8 +88,6 @@ class CimbDecoder:
         return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
 
     def _fix_color(self, c, adjust):
-        if c <= self.color_threshold:
-            return int(c * adjust // 2)
         return int(c * adjust)
 
     def _best_color(self, r, g, b):
@@ -97,20 +95,13 @@ class CimbDecoder:
         # we can do fairly straightforward min/max scaling for everything except black/white
         #print(f'pixel {r:02x}{g:02x}{b:02x}')
         max_val = max(r, g, b, 1)
-        if max_val < self.color_threshold:
-            r, g, b = (0, 0, 0)
-        else:
-            adjust = 255 / max_val
-            r = self._fix_color(r, adjust)
-            g = self._fix_color(g, adjust)
-            b = self._fix_color(b, adjust)
-        #print(f'  adjusted: {r:02x}{g:02x}{b:02x}')
+        adjust = 255 / max_val
+        r = self._fix_color(r, adjust)
+        g = self._fix_color(g, adjust)
+        b = self._fix_color(b, adjust)
 
-        # bg color check
-        best_fit = -1
-        best_distance = self._check_color(self.bg_color, (r, g, b))
-        if best_distance < 2500:
-            return best_fit, best_distance
+        best_fit = 0
+        best_distance = 1000000
 
         for i, c in self.colors.items():
             diff = self._check_color(c, (r, g, b))
@@ -119,8 +110,7 @@ class CimbDecoder:
                 best_distance = diff
                 if best_distance < 2500:
                     break
-        #print(f'  best_fit: {best_fit} , {best_distance}')
-        return best_fit, best_distance
+        return best_fit
 
     def decode_color(self, img_cell):
         if len(self.colors) <= 1:
@@ -132,7 +122,7 @@ class CimbDecoder:
         w,h,d = nim.shape
         nim.shape = (w*h, d)
         r, g, b = tuple(nim.mean(axis=0))
-        bits, _ = self._best_color(r, g, b)
+        bits = self._best_color(r, g, b)
         return bits << self.symbol_bits
 
 
