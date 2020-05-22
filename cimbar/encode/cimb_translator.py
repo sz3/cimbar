@@ -2,6 +2,7 @@ import itertools
 from collections import defaultdict
 from os import path
 
+import numpy
 import imagehash
 from PIL import Image
 
@@ -125,23 +126,13 @@ class CimbDecoder:
         if len(self.colors) <= 1:
             return 0
 
-        candidates = defaultdict(int)
-        pixdata = img_cell.load()
         width, height = img_cell.size
-
-        # "randomly" iterate over pixels in cell, excluding the first and last rows and columns
-        for x, y in skip_iterator(itertools.product(range(1, width - 1), range(1, height - 1)), 31):
-            r, g, b = pixdata[x, y]
-            fit, distance = self._best_color(r, g, b)
-            if fit < 0:
-                #print(f'no color for {x},{y}: {r},{g},{b} -> {fit}, {distance}')
-                continue
-            candidates[fit] += 1
-            if candidates[fit] > 5:
-                return fit << self.symbol_bits
-
-        # left shift final result by `symbol_bits`
-        bits = max(candidates, key=candidates.get)
+        color_cell = img_cell.crop((1, 1, width-2, height-2))
+        nim = numpy.array(color_cell)
+        w,h,d = nim.shape
+        nim.shape = (w*h, d)
+        r, g, b = tuple(nim.mean(axis=0))
+        bits, _ = self._best_color(r, g, b)
         return bits << self.symbol_bits
 
 
