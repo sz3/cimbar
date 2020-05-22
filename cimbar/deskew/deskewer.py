@@ -7,7 +7,7 @@ from cimbar.deskew.scanner import CimbarScanner
 
 
 ANCHOR_SIZE = 30
-ED_DIST = 4
+ED_DIST = 3
 
 
 def correct_perspective(img, target_size, input_pts, output_pts):
@@ -48,7 +48,7 @@ def distance(a, b):
 def _edge_to_anchor_ratio(size, anchor_size):
     # target_ratio = 0.026970954356846474  # can precompute the answer if we want to
     o0 = (anchor_size, anchor_size)
-    o4 = (size // 2, ED_DIST)   # 4  = edge distance
+    o4 = (size // 2, ED_DIST)   # 3  = edge distance
     o1 = (size-anchor_size, anchor_size)  # 994 = (size-30)
     omid = (size // 2, anchor_size)  # 512 == (size // 2)
     return distance(o4, omid) / distance(o0, o1)

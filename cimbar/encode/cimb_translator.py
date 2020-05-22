@@ -141,6 +141,8 @@ class CimbDecoder:
                 return fit << self.symbol_bits
 
         # left shift final result by `symbol_bits`
+        if not candidates:
+            return 0
         bits = max(candidates, key=candidates.get)
         return bits << self.symbol_bits
 

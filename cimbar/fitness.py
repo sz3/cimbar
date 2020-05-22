@@ -7,7 +7,7 @@ iterate over in by byte, by out over tile, e.g. <n> bits
 use mismatches between decodes from out against encodes from in to determine what tiles are troublemakers
 
 Usage:
-  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-3>]
+  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-2>]
   ./fitness.py (-h | --help)
 
 Examples:
@@ -17,7 +17,7 @@ Options:
   -h --help                        Show this help.
   --version                        Show version.
   --dark                           Use inverted palette.
-  --deskew=<0-3>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 3]
+  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
 """
 
 from collections import defaultdict
