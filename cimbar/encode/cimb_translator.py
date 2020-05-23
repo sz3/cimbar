@@ -1,12 +1,11 @@
-import itertools
-from collections import defaultdict
 from os import path
 
 import numpy
 import imagehash
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie1976
+from colormath.color_objects import LabColor, sRGBColor
 from PIL import Image
-
-from cimbar.util.skip_iterator import skip_iterator
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
@@ -50,15 +49,13 @@ def load_tile(name, dark, replacements={}):
 
 
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0, color_threshold=80):
+    def __init__(self, dark, symbol_bits, color_bits=0):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
 
-        self.color_threshold = color_threshold
-        self.bg_color = (0, 0, 0, 255) if dark else (255, 255, 255, 255)
         all_colors = possible_colors(dark)
-        self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
+        self.colors = {c: self._lab_color(all_colors[c]) for c in range(2 ** color_bits)}
 
         for i in range(2 ** symbol_bits):
             name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
@@ -84,16 +81,18 @@ class CimbDecoder:
         cell_hash = imagehash.average_hash(img_cell)
         return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
 
-    def _check_color(self, c, d):
-        return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
+    def _lab_color(self, c):
+        rgb = sRGBColor(c[0], c[1], c[2], is_upscaled=True)
+        return convert_color(rgb, LabColor)
+
+    def _check_color(self, lab, c):
+        return delta_e_cie1976(lab, self._lab_color(c))
 
     def _fix_color(self, c, adjust):
         return int(c * adjust)
 
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
-        # we can do fairly straightforward min/max scaling for everything except black/white
-        #print(f'pixel {r:02x}{g:02x}{b:02x}')
         max_val = max(r, g, b, 1)
         adjust = 255 / max_val
         r = self._fix_color(r, adjust)
@@ -108,8 +107,8 @@ class CimbDecoder:
             if diff < best_distance:
                 best_fit = i
                 best_distance = diff
-                if best_distance < 2500:
-                    break
+                #if best_distance < 30:
+                #    break
         return best_fit
 
     def decode_color(self, img_cell):
