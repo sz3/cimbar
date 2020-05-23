@@ -27,6 +27,8 @@ Options:
 from os import path
 from tempfile import TemporaryDirectory
 
+import cv2
+import numpy
 from docopt import docopt
 from PIL import Image
 
@@ -59,7 +61,7 @@ def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
     deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
 
 
-def _decode_cell(ct, img, x, y, drift):
+def _decode_cell(ct, img, color_img, x, y, drift):
     best_distance = 1000
     for dx, dy in drift.pairs:
         testX = x + drift.x + dx
@@ -71,10 +73,23 @@ def _decode_cell(ct, img, x, y, drift):
             best_bits = bits
             best_dx = dx
             best_dy = dy
-            best_cell = img_cell
         if min_distance < 8:
             break
+
+    testX = x + drift.x + best_dx
+    testY = y + drift.y + best_dy
+    best_cell = color_img.crop((testX+1, testY+1, testX + CELL_SIZE-2, testY + CELL_SIZE-2))
     return best_bits + ct.decode_color(best_cell), best_dx, best_dy
+
+
+def _preprocess_for_decode(img):
+    ''' This might need to be conditional based on source image size.'''
+    img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
+    kernel = numpy.array([[-1.0,-1.0,-1.0], [-1.0,8.5,-1.0], [-1.0,-1.0,-1.0]])
+    img = cv2.filter2D(img, -1, kernel)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = Image.fromarray(img)
+    return img
 
 
 def decode_iter(src_image, dark, deskew, auto_dewarp):
@@ -83,14 +98,15 @@ def decode_iter(src_image, dark, deskew, auto_dewarp):
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
         detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
-        img = Image.open(temp_img)
+        color_img = Image.open(temp_img)
     else:
-        img = Image.open(src_image)
+        color_img = Image.open(src_image)
     ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
+    img = _preprocess_for_decode(color_img)
 
     drift = cell_drift()
     for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
-        best_bits, best_dx, best_dy = _decode_cell(ct, img, x, y, drift)
+        best_bits, best_dx, best_dy = _decode_cell(ct, img, color_img, x, y, drift)
         drift.update(best_dx, best_dy)
         yield best_bits
 

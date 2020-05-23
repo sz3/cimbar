@@ -115,9 +115,7 @@ class CimbDecoder:
         if len(self.colors) <= 1:
             return 0
 
-        width, height = img_cell.size
-        color_cell = img_cell.crop((1, 1, width-2, height-2))
-        nim = numpy.array(color_cell)
+        nim = numpy.array(img_cell)
         w,h,d = nim.shape
         nim.shape = (w*h, d)
         r, g, b = tuple(nim.mean(axis=0))
