@@ -92,7 +92,7 @@ def scan(img, dark, use_edges, size, anchor_size):
 
 def sharpen(img):
     ''' only if new dimensions are > old? '''
-    kernel = numpy.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    kernel = numpy.array([[-1,-1,-1], [-1,8.5,-1], [-1,-1,-1]])
     return cv2.filter2D(img, -1, kernel)
 
 
