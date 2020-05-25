@@ -98,7 +98,7 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
     align = scan(img, dark, use_edges, size, anchor_size)
     if not align:
         print('didnt detect enough points! :(')
-        return
+        return None
 
     if use_edges and auto_dewarp:
         img = fix_lens_distortion(img, size, anchor_size, align)
@@ -113,3 +113,4 @@ def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, ancho
 
     out = correct_perspective(img, (size, size), input_pts, output_pts)
     cv2.imwrite(dst_image, out)
+    return img.shape[:2]

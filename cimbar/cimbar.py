@@ -58,7 +58,7 @@ def get_deskew_params(level):
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
-    deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
+    return deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
 
 
 def _decode_cell(ct, img, color_img, x, y, drift):
@@ -93,16 +93,18 @@ def _preprocess_for_decode(img):
 
 
 def decode_iter(src_image, dark, deskew, auto_dewarp):
+    should_preprocess = False
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
-        detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
+        dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
+        should_preprocess = dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
         color_img = Image.open(temp_img)
     else:
         color_img = Image.open(src_image)
     ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    img = _preprocess_for_decode(color_img)
+    img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     drift = cell_drift()
     for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
