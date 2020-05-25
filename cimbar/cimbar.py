@@ -21,7 +21,7 @@ Options:
   --src_image=<filename>           For decoding. Image to try to decode
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 10]
+  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 15]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
 """
 from os import path
