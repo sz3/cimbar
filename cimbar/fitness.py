@@ -81,6 +81,7 @@ def evaluate(src_file, dst_image, dark, deskew_params):
     # also track bordering tiles? Edges may matter
     errors = 0
     errors_by_tile = defaultdict(ErrorTracker)
+    mismatch_by_tile = defaultdict(ErrorTracker)
 
     ei = encode_iter(src_file, ecc=0)
     di = decode_iter(dst_image, dark, **deskew_params)
@@ -90,10 +91,15 @@ def evaluate(src_file, dst_image, dark, deskew_params):
             err = bin(expected_bits ^ actual_bits).count('1')
             errors += err
             errors_by_tile[expected_bits] += (1, err, 1)
+            mismatch_by_tile[actual_bits] += (1, err, 1)
         else:
             errors_by_tile[expected_bits] += 1
+            mismatch_by_tile[actual_bits] += 1
 
     print_error_report(errors_by_tile)
+    print('***')
+    print('!!! mismatches:')
+    print_error_report(mismatch_by_tile)
 
     print('***')
     print(f'{errors} total bits incorrect')
