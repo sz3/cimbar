@@ -30,6 +30,7 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
     error_bits = 0
     error_tiles = 0
     errors_by_tile = defaultdict(ErrorTracker)
+    mismatch_by_tile = defaultdict(ErrorTracker)
 
     total_bits = getsize(src_file) * 8
     i = 0
@@ -42,11 +43,16 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
             if err:
                 error_tiles += 1
                 errors_by_tile[expected_bits] += (1, err, 1)
+                mismatch_by_tile[actual_bits] += (1, err, 1)
             else:
                 errors_by_tile[expected_bits] += 1
+                mismatch_by_tile[actual_bits] += 1
             i += bits_per_op
 
     print_error_report(errors_by_tile)
+    print('***')
+    print('!!! mismatches:')
+    print_error_report(mismatch_by_tile)
 
     print('***')
     print(f'total bits: {total_bits}')
