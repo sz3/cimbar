@@ -97,6 +97,7 @@ def evaluate(src_file, dst_image, dark, deskew_params):
 
     print('***')
     print(f'{errors} total bits incorrect')
+    return errors
 
 
 def main():

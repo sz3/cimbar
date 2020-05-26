@@ -52,6 +52,7 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
     print(f'total bits: {total_bits}')
     print(f'error bits: {error_bits}')
     print(f'error tiles: {error_tiles}')
+    return error_bits
 
 
 def main():

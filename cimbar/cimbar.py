@@ -46,7 +46,7 @@ CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
-ECC = 10
+ECC = 15
 
 
 def get_deskew_params(level):
