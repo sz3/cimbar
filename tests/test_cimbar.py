@@ -1,3 +1,4 @@
+import random
 from os import path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -20,6 +21,7 @@ def _warp1(src_image, dst_image):
     output_pts = [(21, 212), (115, 943), (854, 198), (795, 942)]
     transformer = cv2.getPerspectiveTransform(numpy.float32(input_pts), numpy.float32(output_pts))
     img = cv2.warpPerspective(img, transformer, (1000, 1000))
+    img = cv2.GaussianBlur(img,(3,3),0)
     cv2.imwrite(dst_image, img)
 
 
@@ -29,7 +31,8 @@ class CimbarTest(TestCase):
         cls.inputs_dir = TemporaryDirectory()
 
         cls.src_file = path.join(cls.inputs_dir.name, 'infile.txt')
-        src_data = b'0123456789abcdefghij' * 1000
+        random_data = bytearray(random.getrandbits(8) for _ in range(4000))
+        src_data = random_data * 4
         with open(cls.src_file, 'wb') as f:
             f.write(src_data)
 
