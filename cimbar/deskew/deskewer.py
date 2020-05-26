@@ -68,7 +68,7 @@ def _get_distortion_factor(align, target_ratio):
 
     all_ratios = []
     for edj, line_mid, line_start, line_end in eparams:
-        if line_mid:
+        if edj:
             ratio = distance(edj, line_mid) / distance(line_start, line_end)
             all_ratios.append(ratio)
     avg = sum(all_ratios) / len(all_ratios)
