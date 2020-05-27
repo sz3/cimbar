@@ -36,6 +36,10 @@ class Anchor:
     def yrange(self):
         return abs(self.y - self.ymax) // 2
 
+    @property
+    def size(self):
+        return (self.x - self.xmax)**2 + (self.y - self.ymax)**2
+
     def __repr__(self):
         return f'({self.xavg}+-{self.xrange}, {self.yavg}+-{self.yrange})'
 
@@ -65,7 +69,7 @@ class ScanState:
         center = ones.pop(2)
         for s in ones:
             ratio_min = center / (s + 1)
-            ratio_max = center / s
+            ratio_max = center / max(1, s - 1)
             if ratio_max < limit_low or ratio_min > limit_high:
                 return None
         anchor_width = sum(ones) + center
@@ -180,7 +184,7 @@ class CimbarScanner:
         self.img = _the_works(img)
         self.height, self.width = self.img.shape
         self.dark = dark
-        self.skip = skip
+        self.skip = skip or self.height // 200
 
     def _test_pixel(self, x, y):
         if self.dark:
@@ -188,11 +192,15 @@ class CimbarScanner:
         else:
             return self.img[y, x] < 127
 
-    def horizontal_scan(self, y):
-        #print('horizontal scan at {}'.format(y))
+    def horizontal_scan(self, y, r=None):
         # for each column, look for the 1:1:4:1:1 pattern
+        if r:
+            r = (max(r[0], 0), min(r[1], self.width))
+        else:
+            r = (0, self.width)
+
         state = ScanState()
-        for x in range(self.width):
+        for x in range(*r):
             active = self._test_pixel(x, y)
             res = state.process(active)
             if res:
@@ -295,6 +303,18 @@ class CimbarScanner:
         for p in candidates:
             range_guess = (p.xavg - (2 * p.yrange), p.xavg + (2 * p.yrange), p.y - p.yrange, p.ymax + p.yrange)
             results += list(self.diagonal_scan(*range_guess))
+        return results
+
+    def t4_confirm_scan(self, candidates):
+        results = []
+        for p in candidates:
+            xrange = (p.x - p.xrange, p.xmax + p.xrange)
+            if not list(self.horizontal_scan(p.yavg, r=xrange)):
+                continue
+            yrange = (p.y - p.yrange, p.ymax + p.yrange)
+            if not list(self.vertical_scan(p.xavg, r=yrange)):
+                continue
+            results.append(p)
         return self.deduplicate_candidates(results)
 
     def deduplicate_candidates(self, candidates):
@@ -324,7 +344,7 @@ class CimbarScanner:
         if len(candidates) <= 4:
             return candidates
 
-        candidates.sort(key=lambda c: c.xrange + c.yrange)
+        candidates.sort(key=lambda c: c.size)
         best_candidates = candidates[-4:]
 
         xrange = sum([c.xrange for c in best_candidates])
@@ -332,7 +352,7 @@ class CimbarScanner:
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
 
-        return [c for c in candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
+        return [c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
 
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
@@ -352,11 +372,14 @@ class CimbarScanner:
         t2_candidates = self.t2_scan_vertical(candidates)
         # if duplicate candidates (e.g. within 10px or so), deduplicate
         t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        t4_candidates = self.t4_confirm_scan(t3_candidates)
         print(candidates)
         print(t2_candidates)
         print(t3_candidates)
+        print(t4_candidates)
 
-        filtered_candidates = self.filter_candidates(t3_candidates)
+        filtered_candidates = self.filter_candidates(t4_candidates)
+        print(f'filtered: {filtered_candidates}')
         return CimbarAlignment(self.sort_top_to_bottom(filtered_candidates))
 
     def chase_edge(self, start, unit):
