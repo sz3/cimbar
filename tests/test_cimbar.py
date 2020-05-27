@@ -16,11 +16,22 @@ CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..'
 
 def _warp1(src_image, dst_image):
     img = cv2.imread(src_image)
-    img = cv2.blur(img, (2,2))
     input_pts = [(0, 0), (0, 1023), (1023, 0), (1023, 1023)]
     output_pts = [(21, 212), (115, 943), (854, 198), (795, 942)]
     transformer = cv2.getPerspectiveTransform(numpy.float32(input_pts), numpy.float32(output_pts))
     img = cv2.warpPerspective(img, transformer, (1000, 1000))
+    img = cv2.GaussianBlur(img,(3,3),0)
+    cv2.imwrite(dst_image, img)
+
+
+def _warp2(src_image, dst_image):
+    img = cv2.imread(src_image)
+    input_pts = [(0, 0), (0, 1023), (1023, 0), (1023, 1023)]
+    output_pts = [(21, 212), (115, 943), (854, 198), (795, 942)]
+    transformer = cv2.getPerspectiveTransform(numpy.float32(input_pts), numpy.float32(output_pts))
+    img = cv2.warpPerspective(img, transformer, (1000, 1000))
+    kernel = numpy.ones((2,2), numpy.uint8)
+    img = cv2.dilate(img, kernel)
     img = cv2.GaussianBlur(img,(3,3),0)
     cv2.imwrite(dst_image, img)
 
@@ -93,4 +104,12 @@ class CimbarTest(TestCase):
 
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
         decode(skewed_image, out_no_ecc, dark=True, ecc=0)
-        self.validate_grader(out_no_ecc, 200)
+        self.validate_grader(out_no_ecc, 2000)
+
+    def test_decode_perspective_bleed(self):
+        skewed_image = self._temp_path('skewed2.jpg')
+        _warp2(self.encoded_file, skewed_image)
+
+        out_no_ecc = self._temp_path('outfile_no_ecc.txt')
+        decode(skewed_image, out_no_ecc, dark=True, ecc=0)
+        self.validate_grader(out_no_ecc, 4000)
