@@ -7,7 +7,7 @@ from cimbar.deskew.scanner import CimbarScanner
 
 
 ANCHOR_SIZE = 30
-ED_DIST = 4
+ED_DIST = 3
 
 
 def correct_perspective(img, target_size, input_pts, output_pts):
@@ -27,16 +27,16 @@ def _naive_radial_undistort(img, distortion_factor):
     print(f'{height},{width}, ... {distortion_factor}')
 
     distCoeff = numpy.zeros((4,1),numpy.float64)
-    distCoeff[0,0] = distortion_factor    # k1. ex: -0.0043366581750921215
-    distCoeff[1,0] = 0.0 # k2. 0
+    distCoeff[0,0] = distortion_factor  # k1. ex: -0.0043366581750921215
+    distCoeff[1,0] = 0 # k2. 0
     distCoeff[2,0] = 0.0 # tangential distortion coefficients are 0
     distCoeff[3,0] = 0.0
 
     cam = numpy.eye(3, dtype=numpy.float32)
     cam[0,2] = width / 2   #  center of distortion X -- assumed to be center of image
     cam[1,2] = height / 2  #  center of distortion Y
-    cam[0,0] = 925.  # "good enough" focal length
-    cam[1,1] = 925.
+    cam[0,0] = width / 4  # "good enough" focal length
+    cam[1,1] = height / 4
 
     return cv2.undistort(img, cam, distCoeff)
 
@@ -48,7 +48,7 @@ def distance(a, b):
 def _edge_to_anchor_ratio(size, anchor_size):
     # target_ratio = 0.026970954356846474  # can precompute the answer if we want to
     o0 = (anchor_size, anchor_size)
-    o4 = (size // 2, ED_DIST)   # 4  = edge distance
+    o4 = (size // 2, ED_DIST)   # 3  = edge distance
     o1 = (size-anchor_size, anchor_size)  # 994 = (size-30)
     omid = (size // 2, anchor_size)  # 512 == (size // 2)
     return distance(o4, omid) / distance(o0, o1)

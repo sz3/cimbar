@@ -7,7 +7,7 @@ iterate over in by byte, by out over tile, e.g. <n> bits
 use mismatches between decodes from out against encodes from in to determine what tiles are troublemakers
 
 Usage:
-  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-3>]
+  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-2>]
   ./fitness.py (-h | --help)
 
 Examples:
@@ -17,7 +17,7 @@ Options:
   -h --help                        Show this help.
   --version                        Show version.
   --dark                           Use inverted palette.
-  --deskew=<0-3>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 3]
+  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
 """
 
 from collections import defaultdict
@@ -55,6 +55,26 @@ class ErrorTracker:
         return str(self)
 
 
+def print_error_report(errors_by_tile):
+    num_symbols = 2 ** BITS_PER_SYMBOL
+    errors_by_symbol = defaultdict(ErrorTracker)
+    errors_by_color = defaultdict(ErrorTracker)
+    for tile, et in errors_by_tile.items():
+        color = tile // num_symbols
+        symbol = tile % num_symbols
+        errors_by_color[color] += et
+        errors_by_symbol[symbol] += et
+
+    print('***')
+    print('final result by symbol:')
+    s = {f'{k:02x}': v for k, v in sorted(errors_by_symbol.items(), key=lambda item: item[1].errors / item[1].total)}
+    print(s)
+
+    print('final result by color:')
+    c = {f'{k:02x}': v for k, v in sorted(errors_by_color.items(), key=lambda item: item[1].errors / item[1].total)}
+    print(c)
+
+
 def evaluate(src_file, dst_image, dark, deskew_params):
     # for byte in src_file, decoded_byte in dst_image:
     # if mismatch, tally tile information
@@ -73,23 +93,7 @@ def evaluate(src_file, dst_image, dark, deskew_params):
         else:
             errors_by_tile[expected_bits] += 1
 
-    num_symbols = 2 ** BITS_PER_SYMBOL
-    errors_by_symbol = defaultdict(ErrorTracker)
-    errors_by_color = defaultdict(ErrorTracker)
-    for tile, et in errors_by_tile.items():
-        color = tile // num_symbols
-        symbol = tile % num_symbols
-        errors_by_color[color] += et
-        errors_by_symbol[symbol] += et
-
-    print('***')
-    print('final result by symbol:')
-    s = {f'{k:02x}': v for k, v in sorted(errors_by_symbol.items(), key=lambda item: item[1].errors / item[1].total)}
-    print(s)
-
-    print('final result by color:')
-    c = {f'{k:02x}': v for k, v in sorted(errors_by_color.items(), key=lambda item: item[1].errors / item[1].total)}
-    print(c)
+    print_error_report(errors_by_tile)
 
     print('***')
     print(f'{errors} total bits incorrect')

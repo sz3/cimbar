@@ -16,17 +16,20 @@ Options:
   --version                        Show version.
   --dark                           Use inverted palette.
 """
+from collections import defaultdict
 from os.path import getsize
 
 from docopt import docopt
 
 from cimbar.cimbar import BITS_PER_OP
+from cimbar.fitness import ErrorTracker, print_error_report
 from cimbar.util.bit_file import bit_file
 
 
 def evaluate(src_file, dst_file, bits_per_op, dark):
     error_bits = 0
     error_tiles = 0
+    errors_by_tile = defaultdict(ErrorTracker)
 
     total_bits = getsize(src_file) * 8
     i = 0
@@ -38,7 +41,12 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
             error_bits += err
             if err:
                 error_tiles += 1
+                errors_by_tile[expected_bits] += (1, err, 1)
+            else:
+                errors_by_tile[expected_bits] += 1
             i += bits_per_op
+
+    print_error_report(errors_by_tile)
 
     print('***')
     print(f'total bits: {total_bits}')
