@@ -4,7 +4,7 @@
 
 Usage:
   ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark | --light]
-              [--deskew=<0-2>] [--ecc=<0-100>]
+              [--deskew=<0-2>] [--ecc=<0-100>] [--force-preprocess]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light] [--ecc=<0-100>]
   ./cimbar.py (-h | --help)
 
@@ -21,8 +21,9 @@ Options:
   --src_image=<filename>           For decoding. Image to try to decode
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 15]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
+  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 15]
+  --force-preprocess               Always run sharpening filters on image before decoding.
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -92,8 +93,8 @@ def _preprocess_for_decode(img):
     return img
 
 
-def decode_iter(src_image, dark, deskew, auto_dewarp):
-    should_preprocess = False
+def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
+    should_preprocess = force_preprocess
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -117,10 +118,10 @@ def decode_iter(src_image, dark, deskew, auto_dewarp):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, deskew=True, auto_dewarp=True):
+def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, deskew=True, auto_dewarp=True):
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, bit_file(outstream, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, deskew, auto_dewarp):
+        for bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
             f.write(bits)
 
 
@@ -180,9 +181,10 @@ def main():
         return
 
     deskew = get_deskew_params(args.get('--deskew'))
+    force_preprocess = args.get('--force-preprocess')
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, **deskew)
+    decode(src_image, dst_data, dark, ecc, force_preprocess, **deskew)
 
 
 if __name__ == '__main__':
