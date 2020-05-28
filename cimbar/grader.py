@@ -68,15 +68,52 @@ def _print_sorted(etdict):
     print(s)
 
 
+class Grader():
+    def __init__(self):
+        self.error_bits = 0
+        self.error_tiles = 0
+        self.symbol_error_bits = 0
+        self.color_error_bits = 0
+        self.errors_by_symbol = defaultdict(ErrorTracker)
+        self.errors_by_color = defaultdict(ErrorTracker)
+        self.mismatch_by_symbol = defaultdict(ErrorTracker)
+        self.mismatch_by_color = defaultdict(ErrorTracker)
+
+    def grade(self, expected_bits, actual_bits):
+        err = bin(expected_bits ^ actual_bits).count('1')
+        if err:
+            self.error_bits += err
+            self.error_tiles += 1
+
+        expected_symbols, expected_color, actual_symbols, actual_color, symbol_err, color_err = (
+                _split_bits(expected_bits, actual_bits)
+        )
+
+        self.symbol_error_bits += symbol_err
+        self.color_error_bits += color_err
+
+        self.errors_by_symbol[expected_symbols] += symbol_err
+        self.errors_by_color[expected_color] += color_err
+        self.mismatch_by_symbol[actual_symbols] += symbol_err
+        self.mismatch_by_color[actual_color] += color_err
+
+    def print_report(self):
+        _print_sorted(self.errors_by_symbol)
+        _print_sorted(self.errors_by_color)
+        print('***')
+        print('!!! mismatches:')
+        _print_sorted(self.mismatch_by_symbol)
+        _print_sorted(self.mismatch_by_color)
+
+        print('***')
+        print(f'error tiles: {self.error_tiles}')
+        print(f'error bits: {self.error_bits}')
+        print(f'symbol error bits: {self.symbol_error_bits}')
+        print(f'color error bits: {self.color_error_bits}')
+
+
 def evaluate(src_file, dst_file, bits_per_op, dark):
-    error_bits = 0
-    symbol_error_bits = 0
-    color_error_bits = 0
-    error_tiles = 0
-    errors_by_symbol = defaultdict(ErrorTracker)
-    errors_by_color = defaultdict(ErrorTracker)
-    mismatch_by_symbol = defaultdict(ErrorTracker)
-    mismatch_by_color = defaultdict(ErrorTracker)
+    g = Grader()
 
     total_bits = getsize(src_file) * 8
     i = 0
@@ -84,39 +121,12 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
         while i < total_bits:
             expected_bits = sf.read()
             actual_bits = df.read()
-            err = bin(expected_bits ^ actual_bits).count('1')
-            if err:
-                error_bits += err
-                error_tiles += 1
-
-            expected_symbols, expected_color, actual_symbols, actual_color, symbol_err, color_err = (
-                    _split_bits(expected_bits, actual_bits)
-            )
-
-            symbol_error_bits += symbol_err
-            color_error_bits += color_err
-
-            errors_by_symbol[expected_symbols] += symbol_err
-            errors_by_color[expected_color] += color_err
-            mismatch_by_symbol[actual_symbols] += symbol_err
-            mismatch_by_color[actual_color] += color_err
-
+            g.grade(expected_bits, actual_bits)
             i += bits_per_op
 
-    _print_sorted(errors_by_symbol)
-    _print_sorted(errors_by_color)
-    print('***')
-    print('!!! mismatches:')
-    _print_sorted(mismatch_by_symbol)
-    _print_sorted(mismatch_by_color)
-
-    print('***')
+    g.print_report()
     print(f'total bits: {total_bits}')
-    print(f'error bits: {error_bits}')
-    print(f'symbol error bits: {symbol_error_bits}')
-    print(f'color error bits: {color_error_bits}')
-    print(f'error tiles: {error_tiles}')
-    return error_bits
+    return g.error_bits
 
 
 def main():
