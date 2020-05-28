@@ -207,10 +207,10 @@ class CimbarScanner:
                 #print('found possible anchor at {}-{},{}'.format(x - res, x, y))
                 yield Anchor(x=x-res, xmax=x-1, y=y)
 
-        # if the pattern is at the edge of the image
+        # if the pattern is at the edge of the range
         res = state.process(False)
         if res:
-            x = self.width
+            x = r[1]
             yield Anchor(x=x-res, xmax=x-1, y=y)
 
     def vertical_scan(self, x, xmax=None, r=None):
@@ -230,10 +230,10 @@ class CimbarScanner:
                 #print('found possible anchor at {},{}-{}'.format(xavg, y-res, y))
                 yield Anchor(x=x, xmax=xmax, y=y-res, ymax=y-1)
 
-         # if the pattern is at the edge of the image
+         # if the pattern is at the edge of the range
         res = state.process(False)
         if res:
-            y = self.height
+            y = r[1]
             yield Anchor(x=x, xmax=xmax, y=y-res, ymax=y-1)
 
     def diagonal_scan(self, start_x, end_x, start_y, end_y):
@@ -309,12 +309,20 @@ class CimbarScanner:
         results = []
         for p in candidates:
             xrange = (p.x - p.xrange, p.xmax + p.xrange)
-            if not list(self.horizontal_scan(p.yavg, r=xrange)):
+            xs = list(self.horizontal_scan(p.yavg, r=xrange))
+            if not xs:
                 continue
+            for confirm in xs:
+                p.merge(confirm)
+
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
-            if not list(self.vertical_scan(p.xavg, r=yrange)):
+            ys = list(self.vertical_scan(p.xavg, r=yrange))
+            if not ys:
                 continue
+            for confirm in ys:
+                p.merge(confirm)
             results.append(p)
+
         return self.deduplicate_candidates(results)
 
     def deduplicate_candidates(self, candidates):
