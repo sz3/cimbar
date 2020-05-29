@@ -40,6 +40,9 @@ class Anchor:
     def size(self):
         return (self.x - self.xmax)**2 + (self.y - self.ymax)**2
 
+    def within_merge_distance(self, rhs, cutoff):
+        return abs(self.xavg - rhs.xavg) < cutoff and abs(self.yavg - rhs.yavg) < cutoff
+
     def __repr__(self):
         return f'({self.xavg}+-{self.xrange}, {self.yavg}+-{self.yrange})'
 
@@ -185,6 +188,7 @@ class CimbarScanner:
         self.height, self.width = self.img.shape
         self.dark = dark
         self.skip = skip or self.height // 200
+        self.cutoff = self.height // 30
 
     def _test_pixel(self, x, y):
         if self.dark:
@@ -313,14 +317,16 @@ class CimbarScanner:
             if not xs:
                 continue
             for confirm in xs:
-                p.merge(confirm)
+                if confirm.within_merge_distance(p, self.cutoff):
+                    p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
             ys = list(self.vertical_scan(p.xavg, r=yrange))
             if not ys:
                 continue
             for confirm in ys:
-                p.merge(confirm)
+                if confirm.within_merge_distance(p, self.cutoff):
+                    p.merge(confirm)
             results.append(p)
 
         return self.deduplicate_candidates(results)
@@ -332,7 +338,7 @@ class CimbarScanner:
             done = False
             for i, elem in enumerate(group):
                 rep = elem[0]
-                if abs(p.xavg - rep.xavg) < 50 and abs(p.yavg - rep.yavg) < 50:
+                if rep.within_merge_distance(p, self.cutoff):
                     group[i].append(p)
                     done = True
                     continue
