@@ -7,7 +7,7 @@ iterate over in by byte, by out over tile, e.g. <n> bits
 use mismatches between decodes from out against encodes from in to determine what tiles are troublemakers
 
 Usage:
-  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-2>]
+  ./fitness.py <decoded_baseline> <encoded_image> [--dark] [--deskew=<0-2>] [--force-preprocess]
   ./fitness.py (-h | --help)
 
 Examples:
@@ -18,6 +18,7 @@ Options:
   --version                        Show version.
   --dark                           Use inverted palette.
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
+  --force-preprocess               Always run sharpening filters on image before decoding.
 """
 
 from collections import defaultdict
@@ -25,34 +26,7 @@ from collections import defaultdict
 from docopt import docopt
 
 from cimbar.cimbar import decode_iter, encode_iter, get_deskew_params, BITS_PER_SYMBOL
-
-
-
-class ErrorTracker:
-    def __init__(self):
-        self.errors = 0
-        self.error_bits = 0
-        self.total = 0
-
-    def __iadd__(self, other):
-        # other is an int, tuple, or errortracker
-        if isinstance(other, int):
-            self.total += other
-        elif isinstance(other, tuple):
-            self.errors += other[0]
-            self.error_bits += other[1]
-            self.total += other[2]
-        else:
-            self.errors += other.errors
-            self.error_bits += other.error_bits
-            self.total += other.total
-        return self
-
-    def __str__(self):
-        return f'{self.errors}/{self.total}'
-
-    def __repr__(self):
-        return str(self)
+from cimbar.grader import Grader
 
 
 def print_error_report(errors_by_tile):
@@ -75,28 +49,44 @@ def print_error_report(errors_by_tile):
     print(c)
 
 
-def evaluate(src_file, dst_image, dark, deskew_params):
+def print_mismatch_matrix(mismatch_matrix):
+    num_symbols = 2 ** BITS_PER_SYMBOL
+    mismatch_by_symbol = defaultdict(lambda: defaultdict(int))
+    mismatch_by_color = defaultdict(lambda: defaultdict(int))
+    for tile, mat in mismatch_matrix.items():
+        at = tile % num_symbols
+        ac = tile // num_symbols
+        for expected, count in mat.items():
+            et = expected % num_symbols
+            ec = expected // num_symbols
+            if ac != ec:
+                mismatch_by_color[ac][ec] += 1
+            if at != et:
+                mismatch_by_symbol[at][et] += 1
+    print('****')
+    print('mismatch breakdown')
+    print('****')
+    print(mismatch_by_symbol)
+    print(mismatch_by_color)
+
+
+def evaluate(src_file, dst_image, dark, force_preprocess, deskew_params):
     # for byte in src_file, decoded_byte in dst_image:
     # if mismatch, tally tile information
     # also track bordering tiles? Edges may matter
-    errors = 0
-    errors_by_tile = defaultdict(ErrorTracker)
+    g = Grader()
+    mismatch_matrix = defaultdict(lambda: defaultdict(int))
 
     ei = encode_iter(src_file, ecc=0)
-    di = decode_iter(dst_image, dark, **deskew_params)
+    di = decode_iter(dst_image, dark, force_preprocess, **deskew_params)
     for (expected_bits, x, y), actual_bits in zip(ei, di):
+        g.grade(expected_bits, actual_bits)
         if expected_bits != actual_bits:
-            # print(f'!!! {expected_bits} != {actual_bits} at {x},{y}')
-            err = bin(expected_bits ^ actual_bits).count('1')
-            errors += err
-            errors_by_tile[expected_bits] += (1, err, 1)
-        else:
-            errors_by_tile[expected_bits] += 1
+            mismatch_matrix[actual_bits][expected_bits] += 1
 
-    print_error_report(errors_by_tile)
-
-    print('***')
-    print(f'{errors} total bits incorrect')
+    g.print_report()
+    print_mismatch_matrix(mismatch_matrix)
+    return g.error_bits
 
 
 def main():
@@ -106,7 +96,8 @@ def main():
     dst_image = args['<encoded_image>']
     dark = args.get('--dark')
     deskew_params = get_deskew_params(args.get('--deskew'))
-    evaluate(src_file, dst_image, dark, deskew_params)
+    force_preprocess = args.get('--force-preprocess')
+    evaluate(src_file, dst_image, dark, force_preprocess, deskew_params)
 
 
 if __name__ == '__main__':

@@ -10,13 +10,13 @@ CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..'
 
 class ReedSolomonStreamTest(TestCase):
     def test_encode_decode(self):
-        s = b'0123456789'*14 + b'abcde'
-        expected_rs_code = b's\x9a\x7f\xa7\xe9#\xc4\xbc\xc1#'
+        s = b'0123456789'*14
+        expected_rs_code = b'\xa4t\x02\x03r\xc3\xad\xf2`\xc5\xb6\x9e&xs'
 
         inbuff = BytesIO(s)
         outbuff = BytesIO()
         with reed_solomon_stream(inbuff) as reed_read, reed_solomon_stream(outbuff, mode='write') as reed_write:
-            b = reed_read.read(145)
+            b = reed_read.read(140)
             self.assertEqual(s + expected_rs_code, b)
             reed_write.write(b)
 
