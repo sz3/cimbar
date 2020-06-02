@@ -4,9 +4,9 @@ from .bit_file import bit_file, bit_write_buffer
 
 
 def interleave(l, num_chunks, index=False):
-    num_offsets = len(l) // num_chunks
+    block_size = len(l) // num_chunks
     for chunk in range(num_chunks):
-        for offset in range(num_offsets):
+        for offset in range(block_size):
             i = (offset * num_chunks) + chunk
             if index:
                 yield l[i], i
@@ -15,9 +15,9 @@ def interleave(l, num_chunks, index=False):
 
 
 def interleave_reverse(l, num_chunks):
-    num_offsets = len(l) // num_chunks
+    block_size = len(l) // num_chunks
     encoded = enumerate(interleave(l, num_chunks, index=True))
-    return {lin: ilv for ilv, (_, lin) in encoded}, num_offsets
+    return {lin: ilv for ilv, (_, lin) in encoded}, block_size
 
 
 class interleaved_writer:

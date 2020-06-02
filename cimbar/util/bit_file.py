@@ -26,7 +26,7 @@ class bit_file:
 
     def __exit__(self, type, value, traceback):
         if self.mode == 'write' and not self.f.closed:
-                self.save()
+            self.save()
         if not self.f.closed:
             with self.f:  # close file
                 pass
