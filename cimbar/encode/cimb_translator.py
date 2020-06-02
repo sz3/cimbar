@@ -187,10 +187,12 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     marker_offset_x = spacing * marker_size
     top_width = dimensions - marker_size - marker_size
     top_cells = top_width * marker_size
+
+    positions = []
     for i in range(top_cells):
         x = (i % top_width) * spacing + marker_offset_x + offset
         y = (i // top_width) * spacing + offset_y
-        yield x, y
+        positions.append((x, y))
 
     mid_y = marker_size * spacing
     mid_width = dimensions
@@ -198,7 +200,7 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     for i in range(mid_cells):
         x = (i % mid_width) * spacing + offset
         y = (i // mid_width) * spacing + mid_y + offset_y
-        yield x, y
+        positions.append((x, y))
 
     bottom_y = (dimensions - marker_size) * spacing
     bottom_width = top_width
@@ -206,4 +208,6 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     for i in range(bottom_cells):
         x = (i % bottom_width) * spacing + marker_offset_x + offset
         y = (i // bottom_width) * spacing + bottom_y + offset_y
-        yield x, y
+        positions.append((x, y))
+
+    return positions

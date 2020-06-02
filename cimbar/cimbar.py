@@ -25,6 +25,7 @@ Options:
   --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 15]
   --force-preprocess               Always run sharpening filters on image before decoding.
 """
+from collections import defaultdict
 from os import path
 from tempfile import TemporaryDirectory
 
@@ -37,6 +38,7 @@ from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, cell_drift, cell_positions
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
+from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
 
 TOTAL_SIZE = 1024
@@ -48,6 +50,7 @@ CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
 ECC = 15
+INTERLEAVE_BLOCKS = 80
 
 
 def get_deskew_params(level):
@@ -119,10 +122,14 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
 
 
 def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, deskew=True, auto_dewarp=True):
+    cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+    interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS)
+
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
-    with rss as outstream, bit_file(outstream, bits_per_op=BITS_PER_OP, mode='write') as f:
-        for bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
-            f.write(bits)
+    with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
+        for i, bits in enumerate(decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)):
+            block = interleave_lookup[i] // block_size
+            iw.write(bits, block)
 
 
 def _get_image_template(width, dark):
@@ -154,7 +161,8 @@ def _get_image_template(width, dark):
 def encode_iter(src_data, ecc):
     rss = reed_solomon_stream(src_data, ecc) if ecc else open(src_data, 'rb')
     with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP) as f:
-        for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
+        cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+        for x, y in interleave(cells, INTERLEAVE_BLOCKS):
             bits = f.read()
             yield bits, x, y
 
