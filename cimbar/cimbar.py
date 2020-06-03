@@ -22,10 +22,9 @@ Options:
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
-  --ecc=<0-100>                    Reed solomon error correction level. 0 is no ecc. [default: 15]
+  --ecc=<0-150>                    Reed solomon error correction level. 0 is no ecc. [default: 30]
   --force-preprocess               Always run sharpening filters on image before decoding.
 """
-from collections import defaultdict
 from os import path
 from tempfile import TemporaryDirectory
 
@@ -49,7 +48,7 @@ CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
-ECC = 15
+ECC = 30
 INTERLEAVE_BLOCKS = 155
 
 
