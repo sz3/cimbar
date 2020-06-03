@@ -13,21 +13,22 @@ CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..'
 
 def possible_colors(dark):
     if dark:
-        color2 = (0xFF, 0xFF, 0, 0xFF)  # yellow is rough in light mode
+        color2 = (0xFF, 0xFF, 0)  # yellow is rough in light mode
     else:
-        color2 = (0, 0, 0xFF, 0xFF)  # blue is rough in dark mode...
+        color2 = (0, 0, 0xFF)  # blue is rough in dark mode...
     colors = [
-        (0, 0xFF, 0xFF, 0xFF),
+        (0, 0xFF, 0xFF),
         color2,
-        (0xFF, 0, 0xFF, 0xFF),
-        (0, 0xFF, 0, 0xFF),
-        (0xFF, 0x7F, 0, 0xFF),  # orange
-        (0, 0x7F, 0xFF, 0xFF),  # sky blue
-        (0xFF, 0, 0, 0xFF),
-        (0x7F, 0, 0xFF, 0xFF),  # purple
-        (0xFF, 0, 0x7F, 0xFF),  # pink ... could potentally swap ff0000 for this?
-        (0x7F, 0xFF, 0, 0xFF),  # lime green ... greens tend to look way too similar, and may not be reliable
-        (0, 0xFF, 0x7F, 0xFF),  # sea green or something
+        (0xFF, 0, 0xFF),
+        (0, 0xFF, 0),
+        (0, 0x7F, 0xFF),  # mid-blue
+        (0xFF, 0xFF, 0xFF),
+        (0xFF, 0, 0),
+        (0xFF, 0x7F, 0),  # orange
+        (0x7F, 0, 0xFF),  # purple
+        (0xFF, 0, 0x7F),  # pink ... could potentally swap ff0000 for this?
+        (0x7F, 0xFF, 0),  # lime green ... greens tend to look way too similar, and may not be reliable
+        (0, 0xFF, 0x7F),  # sea green or something
     ]
     return colors
 
