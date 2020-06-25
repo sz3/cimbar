@@ -102,7 +102,7 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
         tempdir = TemporaryDirectory()
         temp_img = path.join(tempdir.name, path.basename(src_image))
         dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
-        should_preprocess = dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
+        should_preprocess |= dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
         color_img = Image.open(temp_img)
     else:
         color_img = Image.open(src_image)
