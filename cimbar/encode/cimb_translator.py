@@ -19,7 +19,7 @@ def possible_colors(dark, bits=0):
     if bits == 3:
         color3 = (0xFF, 0x6F, 0xFF)
     else:
-        color3 = (0xFF, 0xFF, 0xFF)
+        color3 = (0xFF, 0, 0xFF)
     colors = [
         (0, 0xFF, 0xFF),
         color2,
@@ -133,7 +133,7 @@ class CimbEncoder:
         self.img = {}
         self.colors = {}
 
-        all_colors = possible_colors(dark)
+        all_colors = possible_colors(dark, color_bits)
         num_symbols = 2 ** symbol_bits
         for c in range(2 ** color_bits):
             color = all_colors[c]
