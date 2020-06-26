@@ -25,15 +25,18 @@ class bit_file:
         return self
 
     def __exit__(self, type, value, traceback):
-        if self.mode == 'write':
+        if self.mode == 'write' and not self.f.closed:
             self.save()
         if not self.f.closed:
             with self.f:  # close file
                 pass
 
     def write(self, bits):
-        b1 = Bits(uint=bits, length=self.bits_per_op)
-        self.stream.append(b1)
+        if isinstance(bits, bit_write_buffer):
+            bits = bits.stream
+        if not isinstance(bits, Bits):
+            bits = Bits(uint=bits, length=self.bits_per_op)
+        self.stream.append(bits)
 
     def read(self):
         try:
@@ -47,3 +50,16 @@ class bit_file:
 
     def save(self):
         self.f.write(self.stream.tobytes())
+
+
+class bit_write_buffer():
+    def __init__(self, bits_per_op, **kwargs):
+        super().__init__()
+        self.stream = BitStream()
+        self.bits_per_op = bits_per_op
+
+    def write(self, bits):
+        b1 = Bits(uint=bits, length=self.bits_per_op)
+        prev = len(self.stream)
+        self.stream.append(b1)
+        return len(self.stream) - prev
