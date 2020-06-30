@@ -68,7 +68,7 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
 
 
 class AdjacentCellFinder:
-    def __init__(self, cell_pos, dimensions, marker_size):
+    def __init__(self, cell_pos, dimensions, marker_size=6):
         self.cell_pos = cell_pos
         self.edge_offset = marker_size
         self.dimensions = dimensions
@@ -177,7 +177,7 @@ class FloodDecodeOrder:
         self.cell_finder = cell_finder
 
     def __iter__(self):
-        self.remaining = {(i, coords) for i, coords in enumerate(self.positions)}
+        self.remaining = {i: coords for i, coords in enumerate(self.positions)}
         self.heap = []
         self.most_recent = 0
         # seed corners
@@ -187,15 +187,18 @@ class FloodDecodeOrder:
     def __next__(self):
         try:
             instr = heappop(self.heap)
+            while not self.remaining.pop(instr.index, None):
+                instr = heappop(self.heap)
             self.most_recent = instr.index
-            self.remaining.pop(self.most_recent)
             # index, position, drift
+            print(instr.index)
             return instr.index, self.positions[instr.index], instr.drift
         except IndexError:
-            raise
+            raise StopIteration()
 
     def update(self, dx, dy, error_distance):
         adjacents = self.cell_finder.find_adjacent(self.most_recent)
         for i in adjacents:
-            heappush(self.heap, CellDecodeInstructions(i, cell_drift(dx, dy), error_distance))
+            if i in self.remaining:
+                heappush(self.heap, CellDecodeInstructions(i, cell_drift(dx, dy), error_distance))
 
