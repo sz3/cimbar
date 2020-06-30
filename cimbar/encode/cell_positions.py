@@ -1,3 +1,4 @@
+from copy import copy
 from heapq import heappush, heappop
 
 
@@ -167,8 +168,8 @@ class LinearDecodeOrder:
         except StopIteration:
             raise
 
-    def update(self, drift, error_distance):
-        pass
+    def update(self, best_dx, best_dy, error_distance):
+        self.drift.update(best_dx, best_dy)
 
 
 class CellDecodeInstructions:
@@ -206,7 +207,9 @@ class FloodDecodeOrder:
         except IndexError:
             raise StopIteration()
 
-    def update(self, drift, error_distance):
+    def update(self, best_dx, best_dy, error_distance):
+        drift = copy(self.last_drift)
+        drift.update(best_dx, best_dy)
         adjacents = self.cell_finder.find_adjacent(self.last)
         for i in adjacents:
             if i in self.remaining:

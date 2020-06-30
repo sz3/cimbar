@@ -34,7 +34,7 @@ from docopt import docopt
 from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
-from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder, cell_drift
+from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
@@ -115,9 +115,7 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
     decode_order = FloodDecodeOrder(cell_pos, finder)
     for i, (x, y), drift in decode_order:
         best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
-        d = cell_drift(drift.x, drift.y)
-        d.update(best_dx, best_dy)
-        decode_order.update(d, best_distance)
+        decode_order.update(best_dx, best_dy, best_distance)
         yield i, best_bits
 
     if tempdir:  # cleanup
