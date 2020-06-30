@@ -150,7 +150,6 @@ class AdjacentCellFinder:
         return [a for a in adjs if a is not None]
 
 
-
 class LinearDecodeOrder:
     def __init__(self, positions):
         self.positions = positions
@@ -168,8 +167,8 @@ class LinearDecodeOrder:
         except StopIteration:
             raise
 
-    def update(self, dx, dy, error_distance):
-        self.drift.update(dx, dy)
+    def update(self, drift, error_distance):
+        pass
 
 
 class CellDecodeInstructions:
@@ -190,7 +189,7 @@ class FloodDecodeOrder:
     def __iter__(self):
         self.remaining = {i: coords for i, coords in enumerate(self.positions)}
         self.heap = []
-        self.most_recent = 0
+        self.last = 0
         # seed corners
         heappush(self.heap, CellDecodeInstructions(0, cell_drift(), 0))
         return self
@@ -200,16 +199,16 @@ class FloodDecodeOrder:
             instr = heappop(self.heap)
             while not self.remaining.pop(instr.index, None):
                 instr = heappop(self.heap)
-            self.most_recent = instr.index
+            self.last = instr.index
+            self.last_drift = instr.drift
             # index, position, drift
-            # print(f'{instr.index} at prio {instr.error_distance} and drift {instr.drift}')
             return instr.index, self.positions[instr.index], instr.drift
         except IndexError:
             raise StopIteration()
 
-    def update(self, dx, dy, error_distance):
-        adjacents = self.cell_finder.find_adjacent(self.most_recent)
+    def update(self, drift, error_distance):
+        adjacents = self.cell_finder.find_adjacent(self.last)
         for i in adjacents:
             if i in self.remaining:
-                heappush(self.heap, CellDecodeInstructions(i, cell_drift(dx, dy), error_distance))
+                heappush(self.heap, CellDecodeInstructions(i, drift, error_distance))
 
