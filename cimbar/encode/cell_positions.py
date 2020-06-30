@@ -24,6 +24,9 @@ class cell_drift:
         elif self.y < 0-self.limit:
             self.y = 0-self.limit
 
+    def __str__(self):
+        return f'{self.x},{self.y}'
+
 
 def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     '''
@@ -93,6 +96,8 @@ class AdjacentCellFinder:
             return None
         if self.cell_pos[r][0] < self.cell_pos[index][0]:  # looped
             return None
+        if self.cell_pos[r][1] != self.cell_pos[index][1]:  # sanity
+            return None
         return r
 
     def _left(self, index):
@@ -100,6 +105,8 @@ class AdjacentCellFinder:
         if l < 0:
             return None
         if self.cell_pos[l][0] > self.cell_pos[index][0]:  # looped
+            return None
+        if self.cell_pos[l][1] != self.cell_pos[index][1]:  # sanity
             return None
         return l
 
@@ -114,6 +121,8 @@ class AdjacentCellFinder:
 
         if b >= len(self.cell_pos):
             return None
+        if self.cell_pos[b][0] != self.cell_pos[index][0]:  # sanity
+            return None
         return b
 
     def _top(self, index):
@@ -126,6 +135,8 @@ class AdjacentCellFinder:
             t += self.edge_offset
 
         if t < 0:
+            return None
+        if self.cell_pos[t][0] != self.cell_pos[index][0]:  # sanity
             return None
         return t
 
@@ -191,7 +202,7 @@ class FloodDecodeOrder:
                 instr = heappop(self.heap)
             self.most_recent = instr.index
             # index, position, drift
-            print(instr.index)
+            # print(f'{instr.index} at prio {instr.error_distance} and drift {instr.drift}')
             return instr.index, self.positions[instr.index], instr.drift
         except IndexError:
             raise StopIteration()
