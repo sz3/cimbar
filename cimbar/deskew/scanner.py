@@ -37,11 +37,19 @@ class Anchor:
         return abs(self.y - self.ymax) // 2
 
     @property
+    def max_range(self):
+        return max(abs(self.x - self.xmax), abs(self.y - self.ymax))
+
+    @property
     def size(self):
         return (self.x - self.xmax)**2 + (self.y - self.ymax)**2
 
-    def within_merge_distance(self, rhs, cutoff):
-        return abs(self.xavg - rhs.xavg) < cutoff and abs(self.yavg - rhs.yavg) < cutoff
+    def is_mergeable(self, rhs, cutoff):
+        if abs(self.xavg - rhs.xavg) > cutoff or abs(self.yavg - rhs.yavg) > cutoff:
+            return False
+
+        ratio = rhs.max_range * 10 / self.max_range
+        return ratio > 6 and ratio < 17
 
     def __repr__(self):
         return f'({self.xavg}+-{self.xrange}, {self.yavg}+-{self.yrange})'
@@ -317,7 +325,7 @@ class CimbarScanner:
             if not xs:
                 continue
             for confirm in xs:
-                if confirm.within_merge_distance(p, self.cutoff):
+                if confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
@@ -325,7 +333,7 @@ class CimbarScanner:
             if not ys:
                 continue
             for confirm in ys:
-                if confirm.within_merge_distance(p, self.cutoff):
+                if confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
             results.append(p)
 
@@ -338,7 +346,7 @@ class CimbarScanner:
             done = False
             for i, elem in enumerate(group):
                 rep = elem[0]
-                if rep.within_merge_distance(p, self.cutoff):
+                if rep.is_mergeable(p, self.cutoff):
                     group[i].append(p)
                     done = True
                     continue
