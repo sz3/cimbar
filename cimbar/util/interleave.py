@@ -4,14 +4,17 @@ from .bit_file import bit_file, bit_write_buffer
 
 
 def interleave(l, num_chunks, partitions=1, index=False):
-    for split in range(num_chunks):
-        i = split
-        while i < len(l):
-            if index:
-                yield l[i], i
-            else:
-                yield l[i]
-            i += num_chunks
+    part_len = len(l) / partitions
+    for p in range(partitions):
+        for split in range(num_chunks):
+            i = split
+            while i < part_len:
+                elem = int(i + (part_len * p))
+                if index:
+                    yield l[elem], elem
+                else:
+                    yield l[elem]
+                i += num_chunks
 
 
 def interleave_reverse(l, num_chunks):
