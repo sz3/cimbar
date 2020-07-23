@@ -34,7 +34,8 @@ from docopt import docopt
 from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, cell_drift, cell_positions
+from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -82,7 +83,7 @@ def _decode_cell(ct, img, color_img, x, y, drift):
     testX = x + drift.x + best_dx
     testY = y + drift.y + best_dy
     best_cell = color_img.crop((testX+1, testY+1, testX + CELL_SIZE-2, testY + CELL_SIZE-2))
-    return best_bits + ct.decode_color(best_cell), best_dx, best_dy
+    return best_bits + ct.decode_color(best_cell), best_dx, best_dy, best_distance
 
 
 def _preprocess_for_decode(img):
@@ -109,11 +110,13 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
     ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
-    drift = cell_drift()
-    for x, y in cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET):
-        best_bits, best_dx, best_dy = _decode_cell(ct, img, color_img, x, y, drift)
-        drift.update(best_dx, best_dy)
-        yield best_bits
+    cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
+    decode_order = FloodDecodeOrder(cell_pos, finder)
+    for i, (x, y), drift in decode_order:
+        best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
+        decode_order.update(best_dx, best_dy, best_distance)
+        yield i, best_bits
 
     if tempdir:  # cleanup
         with tempdir:
@@ -126,7 +129,8 @@ def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, desk
 
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
-        for i, bits in enumerate(decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)):
+        decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
+        for i, bits in sorted(decoding.items()):
             block = interleave_lookup[i] // block_size
             iw.write(bits, block)
 
