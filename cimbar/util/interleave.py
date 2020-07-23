@@ -3,15 +3,15 @@ from collections import defaultdict
 from .bit_file import bit_file, bit_write_buffer
 
 
-def interleave(l, num_chunks, index=False):
-    block_size = len(l) // num_chunks
-    for chunk in range(num_chunks):
-        for offset in range(block_size):
-            i = (offset * num_chunks) + chunk
+def interleave(l, num_chunks, partitions=1, index=False):
+    for split in range(num_chunks):
+        i = split
+        while i < len(l):
             if index:
                 yield l[i], i
             else:
                 yield l[i]
+            i += num_chunks
 
 
 def interleave_reverse(l, num_chunks):
