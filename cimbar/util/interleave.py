@@ -18,7 +18,7 @@ def interleave(l, num_chunks, partitions=1, index=False):
 
 
 def interleave_reverse(l, num_chunks, partitions=1):
-    block_size = len(l) // num_chunks
+    block_size = len(l) // num_chunks // partitions
     encoded = enumerate(interleave(l, num_chunks, partitions, index=True))
     return {lin: ilv for ilv, (_, lin) in encoded}, block_size
 
