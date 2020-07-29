@@ -121,7 +121,7 @@ class CimbDecoder:
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
         max_val = max(r, g, b, 1)
-        min_val = min(r, g, b, 50)
+        min_val = min(r, g, b, 48)
         adjust = 255 / (max_val - min_val)
         r = self._fix_color(r, adjust, min_val)
         g = self._fix_color(g, adjust, min_val)
