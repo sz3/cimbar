@@ -32,15 +32,15 @@ def possible_colors(dark, bits=0):
         ]
     else:  # dark and bits == 3 (>=??)
         colors = [
-            (0, 0xFF, 0xFF),
-            (0xFF, 0xFF, 0),
-            (0xFF, 0x6F, 0xFF),
+            (0, 0xFF, 0xFF),  # cyan
+            (0xFF, 0xFF, 0),  # yellow
+            (0xFF, 0x6F, 0xFF),  # magenta
             (0, 0xFF, 0),
             (0, 0x7F, 0xFF),  # mid-blue
             (0xFF, 0xFF, 0xFF),
             (0xFF, 65, 65),  # red
             (0xFF, 0x9F, 0),  # orange
-            (0x7F, 0, 0xFF),  # purple
+            (0x9F, 0, 0xFF),  # purple
             (0xFF, 0, 0x7F),  # pink ... could potentally swap ff0000 for this?
             (0x7F, 0xFF, 0),  # lime green ... greens tend to look way too similar, and may not be reliable
             (0, 0xFF, 0x7F),  # sea green or something
