@@ -33,7 +33,7 @@ def possible_colors(dark, bits=0):
             (0xFF, 0xFF, 0),  # yellow
             (0xFF, 0x6F, 0xFF),  # magenta
             (0, 0xFF, 0),
-            (0, 0x7F, 0xFF),  # mid-blue
+            (65, 0x6F, 0xFF),  # mid-blue
             (0xFF, 0xFF, 0xFF),
             (0xFF, 65, 65),  # red
             (0xFF, 0x9F, 0),  # orange
@@ -118,10 +118,8 @@ class CimbDecoder:
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
         max_val = max(r, g, b, 1)
-        min_val = min(r, g, b)
-        if min_val > (max_val / 2):
-            min_val = 0
-        adjust = 255 / (max_val - min_val)
+        min_val = min(r, g, b, 0)
+        adjust = 255 / max_val
         r = self._fix_color(r, adjust, min_val)
         g = self._fix_color(g, adjust, min_val)
         b = self._fix_color(b, adjust, min_val)

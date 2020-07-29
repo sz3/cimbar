@@ -43,7 +43,7 @@ from cimbar.util.interleave import interleave, interleave_reverse, interleaved_w
 
 TOTAL_SIZE = 1024
 BITS_PER_SYMBOL = 4
-BITS_PER_COLOR = 2
+BITS_PER_COLOR = 3
 BITS_PER_OP = BITS_PER_SYMBOL + BITS_PER_COLOR
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
