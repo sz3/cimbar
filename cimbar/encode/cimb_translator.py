@@ -114,7 +114,7 @@ class CimbDecoder:
 
     def _fix_color(self, c, adjust, down):
         c = int((c - down) * adjust)
-        if c > 200:
+        if c > (245 - down):
             c = 255
         return c
 
@@ -122,6 +122,8 @@ class CimbDecoder:
         # probably some scaling will be good.
         max_val = max(r, g, b, 1)
         min_val = min(r, g, b, 48)
+        if min_val >= max_val:
+            min_val = 0
         adjust = 255 / (max_val - min_val)
         r = self._fix_color(r, adjust, min_val)
         g = self._fix_color(g, adjust, min_val)
