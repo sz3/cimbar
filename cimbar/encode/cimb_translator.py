@@ -12,13 +12,13 @@ def possible_colors(dark, bits=0):
     if not dark:
         colors = [
             (0, 0, 0),
-            (0xFF, 0, 0xFF),
-            (0, 0xFF, 0xFF),
-            (0xFF, 0x9F, 0),
-            (0, 0xFF, 0),
-            (0xFF, 0, 0),
+            (0xFF, 0, 0xFF),  # magenta
             (0, 0, 0xFF),
+            (0, 0xFF, 0xFF),  # cyan
+            (0xFF, 0, 0),
+            (0xFF, 0x9F, 0),  # orange
             (0x7F, 0, 0xFF),  # purple
+            (0, 0xFF, 0),
         ]
     elif dark and bits < 3:
         colors = [
