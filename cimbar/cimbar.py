@@ -51,6 +51,7 @@ CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
 ECC = 30
 INTERLEAVE_BLOCKS = 155
+INTERLEAVE_PARTITIONS = 2
 
 
 def get_deskew_params(level):
@@ -125,7 +126,7 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
 
 def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-    interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS)
+    interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
 
     rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
     with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
@@ -165,7 +166,7 @@ def encode_iter(src_data, ecc):
     rss = reed_solomon_stream(src_data, ecc) if ecc else open(src_data, 'rb')
     with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP) as f:
         cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-        for x, y in interleave(cells, INTERLEAVE_BLOCKS):
+        for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
             bits = f.read()
             yield bits, x, y
 

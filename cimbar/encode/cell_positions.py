@@ -192,7 +192,12 @@ class FloodDecodeOrder:
         self.heap = []
         self.last = 0
         # seed corners
+        last_index = len(self.positions)-1
+        small_row_len = self.cell_finder.dimensions - self.cell_finder.edge_offset - self.cell_finder.edge_offset - 1
         heappush(self.heap, CellDecodeInstructions(0, cell_drift(), 0))
+        heappush(self.heap, CellDecodeInstructions(small_row_len, cell_drift(), 0))
+        heappush(self.heap, CellDecodeInstructions(last_index, cell_drift(), 0))
+        heappush(self.heap, CellDecodeInstructions(last_index-small_row_len, cell_drift(), 0))
         return self
 
     def __next__(self):

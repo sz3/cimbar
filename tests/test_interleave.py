@@ -5,6 +5,8 @@ from cimbar.util.interleave import interleave, interleave_reverse
 
 
 class InterleaveTest(TestCase):
+    maxDiff = 100000000000
+
     def test_interleave_encoding(self):
         a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         a = a*3
@@ -57,3 +59,11 @@ class InterleaveTest(TestCase):
         self.assertEquals(a, b)
         self.assertEquals(block_size, 6)
 
+    def test_interleave_partition(self):
+        a = list(range(20))
+
+        res = list(interleave(a, 5, partitions=2))
+        self.assertEquals(res, [
+            0, 5, 1, 6, 2, 7, 3, 8, 4, 9,
+            10, 15, 11, 16, 12, 17, 13, 18, 14, 19
+        ])

@@ -3,20 +3,23 @@ from collections import defaultdict
 from .bit_file import bit_file, bit_write_buffer
 
 
-def interleave(l, num_chunks, index=False):
-    block_size = len(l) // num_chunks
-    for chunk in range(num_chunks):
-        for offset in range(block_size):
-            i = (offset * num_chunks) + chunk
-            if index:
-                yield l[i], i
-            else:
-                yield l[i]
+def interleave(l, num_chunks, partitions=1, index=False):
+    part_len = len(l) / partitions
+    for p in range(partitions):
+        for split in range(num_chunks):
+            i = split
+            while i < part_len:
+                elem = int(i + (part_len * p))
+                if index:
+                    yield l[elem], elem
+                else:
+                    yield l[elem]
+                i += num_chunks
 
 
-def interleave_reverse(l, num_chunks):
-    block_size = len(l) // num_chunks
-    encoded = enumerate(interleave(l, num_chunks, index=True))
+def interleave_reverse(l, num_chunks, partitions=1):
+    block_size = len(l) // num_chunks // partitions
+    encoded = enumerate(interleave(l, num_chunks, partitions, index=True))
     return {lin: ilv for ilv, (_, lin) in encoded}, block_size
 
 
