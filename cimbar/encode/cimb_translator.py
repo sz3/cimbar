@@ -7,6 +7,7 @@ from PIL import Image
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
 
+_last_color = None
 
 def possible_colors(dark, bits=0):
     if not dark:
@@ -149,6 +150,8 @@ class CimbDecoder:
         w,h,d = nim.shape
         nim.shape = (w*h, d)
         r, g, b = tuple(nim.mean(axis=0))
+        global _last_color
+        _last_color = (r,g,b)
         bits = self._best_color(r, g, b)
         return bits << self.symbol_bits
 

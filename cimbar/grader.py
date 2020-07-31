@@ -89,6 +89,10 @@ class Grader():
                 _split_bits(expected_bits, actual_bits)
         )
 
+        if color_err:
+            from cimbar.encode.cimb_translator import _last_color
+            print(f'{color_err}: {_last_color}')
+
         self.symbol_error_bits += symbol_err
         self.color_error_bits += color_err
 
