@@ -283,18 +283,24 @@ class CimbarScanner:
         if res:
             yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
 
-    def t1_scan_horizontal(self):
+    def t1_scan_horizontal(self, skip=None, start_y=None, end_y=None, r=None):
         '''
         gets a smart answer for Xs
         '''
+        if not skip:
+            skip = self.skip
+        y = start_y or 0
+
+        if not end_y:
+            end_y = self.height
+        else:
+            end_y = min(end_y, self.height)
+
         results = []
-        y = 0
-        y += self.skip
-        while y < self.height:  # eventually != 0?
-            if y > self.height:
-                y = y % self.height
-            results += list(self.horizontal_scan(y))
-            y += self.skip
+        y += skip
+        while y < end_y:
+            results += list(self.horizontal_scan(y, r))
+            y += skip
         return results
 
     def t2_scan_vertical(self, candidates):
@@ -363,18 +369,19 @@ class CimbarScanner:
         return average
 
     def filter_candidates(self, candidates):
-        if len(candidates) <= 4:
-            return candidates
+        if len(candidates) < 3:
+            return candidates, None
 
         candidates.sort(key=lambda c: c.size)
-        best_candidates = candidates[-4:]
+        best_candidates = candidates[-3:]
 
         xrange = sum([c.xrange for c in best_candidates])
         yrange = sum([c.yrange for c in best_candidates])
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
+        max_range = max(xrange, yrange)
 
-        return [c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
+        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range)
 
     def sort_top_to_bottom(self, candidates):
         candidates.sort()
@@ -384,7 +391,7 @@ class CimbarScanner:
         p1_xoff = abs(p1.xavg - top_left.xavg)
         p2_xoff = abs(p2.xavg - top_left.xavg)
         if p2_xoff > p1_xoff:
-            candidates = [top_left, p2, p1, candidates[3]]
+            candidates = [top_left, p2, p1]
         return [(p.xavg, p.yavg) for p in candidates]
 
     def scan(self):
@@ -400,9 +407,41 @@ class CimbarScanner:
         print(t3_candidates)
         print(t4_candidates)
 
-        filtered_candidates = self.filter_candidates(t4_candidates)
+        filtered_candidates, max_range = self.filter_candidates(t4_candidates)
         print(f'filtered: {filtered_candidates}')
-        return CimbarAlignment(self.sort_top_to_bottom(filtered_candidates))
+
+        anchors = self.sort_top_to_bottom(filtered_candidates)
+        return CimbarAlignment(self.add_fourth_corner(anchors, max_range))
+
+    def add_fourth_corner(self, anchors, max_range):
+        top_edge = numpy.array(anchors[1]) - anchors[0]
+        left_edge = numpy.array(anchors[2]) - anchors[0]
+        bottom_right_guess1 = anchors[2] + top_edge
+        bottom_right_guess2 = anchors[1] + left_edge
+        bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
+        print('4th corner should be near: {}'.format(bottom_right_speculative))
+
+        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range * 6, max_range * 6)
+        anchors.append(fourth)
+        return anchors
+
+    def scan_fourth_corner(self, center, xrange, yrange):
+        self.dark = not self.dark
+
+        start_y = center[1] - yrange
+        end_y = center[1] + yrange
+        start_x = center[0] - xrange
+        end_x = center[0] + xrange
+
+        candidates = self.t1_scan_horizontal(start_y=start_y, end_y=end_y, r=(start_x, end_x))
+        t2_candidates = self.t2_scan_vertical(candidates)
+        t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        t4_candidates = self.t4_confirm_scan(t3_candidates)
+        t4_candidates.sort(key=lambda c: c.size)
+        print('how did we do?')
+
+        c4 = t4_candidates[-1]
+        return (c4.xavg, c4.yavg)
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
