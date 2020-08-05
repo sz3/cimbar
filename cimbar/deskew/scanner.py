@@ -337,7 +337,7 @@ class CimbarScanner:
             results += list(self.diagonal_scan(*range_guess))
         return results
 
-    def t4_confirm_scan(self, candidates):
+    def t4_confirm_scan(self, candidates, merge=True):
         results = []
         for p in candidates:
             xrange = (p.x - p.xrange, p.xmax + p.xrange)
@@ -345,7 +345,7 @@ class CimbarScanner:
             if not xs:
                 continue
             for confirm in xs:
-                if confirm.is_mergeable(p, self.cutoff):
+                if merge and confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
@@ -353,7 +353,7 @@ class CimbarScanner:
             if not ys:
                 continue
             for confirm in ys:
-                if confirm.is_mergeable(p, self.cutoff):
+                if merge and confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
             results.append(p)
 
@@ -492,7 +492,7 @@ class CimbarScanner:
             return None
 
         t3_candidates = self.t3_scan_diagonal(t2_candidates)
-        t4_candidates = self.t4_confirm_scan(t3_candidates)
+        t4_candidates = self.t4_confirm_scan(t3_candidates, merge=False)
         t4_candidates.sort(key=lambda c: c.size)
 
         c4 = t4_candidates[-1]
