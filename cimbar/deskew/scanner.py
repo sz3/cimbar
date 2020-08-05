@@ -398,15 +398,50 @@ class CimbarScanner:
         return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range)
 
     def sort_top_to_bottom(self, candidates):
-        candidates.sort()
-        top_left = candidates[0]
-        p1 = candidates[1]
-        p2 = candidates[2]
-        p1_xoff = abs(p1.xavg - top_left.xavg)
-        p2_xoff = abs(p2.xavg - top_left.xavg)
-        if p2_xoff > p1_xoff:
-            candidates = [top_left, p2, p1]
-        return [(p.xavg, p.yavg) for p in candidates]
+        # calculate distance from candidates. Longest = 2,3
+        # 2 = clockwise from 1
+        def _fix_index(idx):
+            if idx < 0:
+                idx = 2
+            elif idx > 2:
+                idx = 0
+            return idx
+
+        print(f'sorting {candidates} in tl-tr-bl order.')
+        cs = [
+            (p.xavg, p.yavg) for p in candidates
+        ]
+        edges = [
+            numpy.subtract(cs[1], cs[2]),
+            numpy.subtract(cs[2], cs[0]),
+            numpy.subtract(cs[0], cs[1]),
+        ]
+
+        top_left = 0
+        max_d = 0
+        for i, e in enumerate(edges):
+            dist = e.dot(e)
+            if dist > max_d:
+                max_d = dist
+                top_left = i
+
+        print(f'top left is {top_left}')
+        outgoing_edge = top_left - 1
+        if outgoing_edge < 0:
+            outgoing_edge = 2
+        if edges[outgoing_edge].dot(cs[top_left]) > 0:
+            bottom_left = _fix_index(top_left + 1)
+            top_right = _fix_index(top_left - 1)
+        else:
+            bottom_left = _fix_index(top_left - 1)
+            top_right = _fix_index(top_left + 1)
+
+        candidates = [
+            cs[top_left],
+            cs[top_right],
+            cs[bottom_left],
+        ]
+        return candidates
 
     def scan(self):
         # do these need to track all known ranges, so we can approximate bounding lines?
@@ -430,8 +465,8 @@ class CimbarScanner:
     def add_fourth_corner(self, anchors, max_range):
         self.scan_ratio = '1:2:2'
 
-        top_edge = numpy.array(anchors[1]) - anchors[0]
-        left_edge = numpy.array(anchors[2]) - anchors[0]
+        top_edge = numpy.subtract(anchors[1], anchors[0])
+        left_edge = numpy.subtract(anchors[2], anchors[0])
         bottom_right_guess1 = anchors[2] + top_edge
         bottom_right_guess2 = anchors[1] + left_edge
         bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
@@ -442,10 +477,10 @@ class CimbarScanner:
         return anchors
 
     def scan_fourth_corner(self, center, xrange, yrange):
-        start_y = center[1] - (yrange * 6)
-        end_y = center[1] + (yrange * 6)
-        start_x = center[0] - (xrange * 6)
-        end_x = center[0] + (xrange * 6)
+        start_y = center[1] - (yrange * 4)
+        end_y = center[1] + (yrange * 4)
+        start_x = center[0] - (xrange * 4)
+        end_x = center[0] + (xrange * 4)
 
         skip = self.skip // 2
         print(f'looking for 4th corner at {start_x}-{end_x},{start_y}-{end_y}. skip={skip}')
