@@ -60,16 +60,22 @@ class Anchor:
 
 
 class ScanState:
-    def __init__(self):
+    RATIO_LIMITS = {
+        '1:1:4': [(3.0, 6.0), (3.0, 6.0)],
+        '1:2:2': [(1.5, 3.0), (0.5, 1.5)],
+    }
+
+    def __init__(self, ratio='1:1:4'):
         self.state = 0
         self.tally = [0]
+        self.limits = self.RATIO_LIMITS[ratio]
 
     def pop_state(self):
         # when state == 6, we need to drop down to state == 4
         self.state -= 2
         self.tally = self.tally[2:]
 
-    def evaluate_state(self, limit_low, limit_high):
+    def evaluate_state(self):
         if self.state != 6:
             return None
         # ratio should be 1:1:4:1:1
@@ -77,16 +83,23 @@ class ScanState:
         for s in ones:
             if not s:
                 return None
+
         center = ones.pop(2)
-        for s in ones:
+        instructions = {
+            ones[0]: self.limits[0],
+            ones[1]: self.limits[1],
+            ones[2]: self.limits[1],
+            ones[3]: self.limits[0],
+        }
+        for s, limits in instructions.items():
             ratio_min = center / (s + 1)
             ratio_max = center / max(1, s - 1)
-            if ratio_max < limit_low or ratio_min > limit_high:
+            if ratio_max < limits[0] or ratio_min > limits[1]:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
 
-    def process(self, active, limit_low=3.0, limit_high=6.0):
+    def process(self, active):
         # transitions first
         is_transition = (self.state in [0, 2, 4] and active) or (self.state in [1, 3, 5] and not active)
         if is_transition:
@@ -95,7 +108,7 @@ class ScanState:
             self.tally[-1] += 1
 
             if self.state == 6:
-                res = self.evaluate_state(limit_low, limit_high)
+                res = self.evaluate_state()
                 self.pop_state()
                 return res
             return None
@@ -197,6 +210,7 @@ class CimbarScanner:
         self.dark = dark
         self.skip = skip or self.height // 200
         self.cutoff = self.height // 30
+        self.scan_ratio = '1:1:4'
 
     def _test_pixel(self, x, y):
         if self.dark:
@@ -211,7 +225,7 @@ class CimbarScanner:
         else:
             r = (0, self.width)
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         for x in range(*r):
             active = self._test_pixel(x, y)
             res = state.process(active)
@@ -234,7 +248,7 @@ class CimbarScanner:
         else:
             r = (0, self.height)
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         for y in range(*r):
             active = self._test_pixel(xavg, y)
             res = state.process(active)
@@ -264,7 +278,7 @@ class CimbarScanner:
 
         #print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         x = start_x
         y = start_y
         while x < end_x and y < end_y:
@@ -414,31 +428,37 @@ class CimbarScanner:
         return CimbarAlignment(self.add_fourth_corner(anchors, max_range))
 
     def add_fourth_corner(self, anchors, max_range):
+        self.scan_ratio = '1:2:2'
+
         top_edge = numpy.array(anchors[1]) - anchors[0]
         left_edge = numpy.array(anchors[2]) - anchors[0]
         bottom_right_guess1 = anchors[2] + top_edge
         bottom_right_guess2 = anchors[1] + left_edge
         bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
-        print('4th corner should be near: {}'.format(bottom_right_speculative))
 
-        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range * 6, max_range * 6)
-        anchors.append(fourth)
+        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range)
+        if fourth:
+            anchors.append(fourth)
         return anchors
 
     def scan_fourth_corner(self, center, xrange, yrange):
-        self.dark = not self.dark
+        start_y = center[1] - (yrange * 6)
+        end_y = center[1] + (yrange * 6)
+        start_x = center[0] - (xrange * 6)
+        end_x = center[0] + (xrange * 6)
 
-        start_y = center[1] - yrange
-        end_y = center[1] + yrange
-        start_x = center[0] - xrange
-        end_x = center[0] + xrange
+        skip = self.skip // 2
+        print(f'looking for 4th corner at {start_x}-{end_x},{start_y}-{end_y}. skip={skip}')
 
-        candidates = self.t1_scan_horizontal(start_y=start_y, end_y=end_y, r=(start_x, end_x))
+        candidates = self.t1_scan_horizontal(skip=skip, start_y=start_y, end_y=end_y, r=(start_x, end_x))
         t2_candidates = self.t2_scan_vertical(candidates)
+        candidates = [c for c in t2_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
+        if not candidates:
+            return None
+
         t3_candidates = self.t3_scan_diagonal(t2_candidates)
         t4_candidates = self.t4_confirm_scan(t3_candidates)
         t4_candidates.sort(key=lambda c: c.size)
-        print('how did we do?')
 
         c4 = t4_candidates[-1]
         return (c4.xavg, c4.yavg)

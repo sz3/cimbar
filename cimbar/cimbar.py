@@ -142,7 +142,7 @@ def _get_image_template(width, dark):
 
     suffix = 'dark' if dark else 'light'
     anchor = Image.open(f'bitmap/anchor-{suffix}.png')
-    anchor_br = Image.open(f'bitmap/anchor-light.png')
+    anchor_br = Image.open(f'bitmap/anchor-secondary-{suffix}.png')
     aw, ah = anchor.size
     img.paste(anchor, (0, 0))
     img.paste(anchor, (0, width-ah))
