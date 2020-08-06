@@ -408,6 +408,8 @@ class CimbarScanner:
             return idx
 
         print(f'sorting {candidates} in tl-tr-bl order.')
+
+        # get edges
         cs = [
             (p.xavg, p.yavg) for p in candidates
         ]
@@ -417,6 +419,7 @@ class CimbarScanner:
             numpy.subtract(cs[0], cs[1]),
         ]
 
+        # find longest edge. This will correspond to the index of the anchor opposite it (thanks to our ordering of `edges`)
         top_left = 0
         max_d = 0
         for i, e in enumerate(edges):
@@ -425,16 +428,18 @@ class CimbarScanner:
                 max_d = dist
                 top_left = i
 
-        print(f'top left is {top_left}')
-        outgoing_edge = top_left - 1
-        if outgoing_edge < 0:
-            outgoing_edge = 2
-        if edges[outgoing_edge].dot(cs[top_left]) > 0:
-            bottom_left = _fix_index(top_left + 1)
-            top_right = _fix_index(top_left - 1)
-        else:
-            bottom_left = _fix_index(top_left - 1)
+        # compare the directions of the incoming/departing edges to figure out which way is clockwise
+        departing_edge = edges[_fix_index(top_left - 1)]
+        incoming_edge = edges[_fix_index(top_left + 1)]
+        incoming_edge = (-incoming_edge[1], incoming_edge[0])  # rotate 90 degrees right
+        overlap = departing_edge - incoming_edge
+
+        if overlap.dot(overlap) < departing_edge.dot(departing_edge):
             top_right = _fix_index(top_left + 1)
+            bottom_left = _fix_index(top_left - 1)
+        else:
+            top_right = _fix_index(top_left - 1)
+            bottom_left = _fix_index(top_left + 1)
 
         candidates = [
             cs[top_left],
