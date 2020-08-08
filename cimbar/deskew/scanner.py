@@ -62,7 +62,7 @@ class Anchor:
 class ScanState:
     RATIO_LIMITS = {
         '1:1:4': [(3.0, 6.0), (3.0, 6.0)],
-        '1:2:2': [(1.5, 3.0), (0.5, 1.5)],
+        '1:2:2': [(1.0, 3.0), (0.5, 1.5)],
     }
 
     def __init__(self, ratio='1:1:4'):
@@ -394,8 +394,9 @@ class CimbarScanner:
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
         max_range = max(xrange, yrange)
+        uncertainty = best_candidates[2].size / best_candidates[0].size
 
-        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range)
+        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range, uncertainty)
 
     def sort_top_to_bottom(self, candidates):
         # calculate distance from candidates. Longest = 2,3
@@ -461,13 +462,14 @@ class CimbarScanner:
         print(t3_candidates)
         print(t4_candidates)
 
-        filtered_candidates, max_range = self.filter_candidates(t4_candidates)
+        filtered_candidates, max_range, uncertainty = self.filter_candidates(t4_candidates)
         print(f'filtered: {filtered_candidates}')
 
         anchors = self.sort_top_to_bottom(filtered_candidates)
-        return CimbarAlignment(self.add_fourth_corner(anchors, max_range))
+        anchors = self.add_fourth_corner(anchors, max_range, uncertainty)
+        return CimbarAlignment(anchors)
 
-    def add_fourth_corner(self, anchors, max_range):
+    def add_fourth_corner(self, anchors, max_range, uncertainty):
         self.scan_ratio = '1:2:2'
 
         top_edge = numpy.subtract(anchors[1], anchors[0])
@@ -476,16 +478,17 @@ class CimbarScanner:
         bottom_right_guess2 = anchors[1] + left_edge
         bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
 
-        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range)
+        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range, uncertainty)
         if fourth:
             anchors.append(fourth)
         return anchors
 
-    def scan_fourth_corner(self, center, xrange, yrange):
-        start_y = center[1] - (yrange * 4)
-        end_y = center[1] + (yrange * 4)
-        start_x = center[0] - (xrange * 4)
-        end_x = center[0] + (xrange * 4)
+    def scan_fourth_corner(self, center, xrange, yrange, uncertainty):
+        uncertainty = uncertainty * 4
+        start_y = int(center[1] - (yrange * uncertainty))
+        end_y = int(center[1] + (yrange * uncertainty))
+        start_x = int(center[0] - (xrange * uncertainty))
+        end_x = int(center[0] + (xrange * uncertainty))
 
         skip = self.skip // 2
         print(f'looking for 4th corner at {start_x}-{end_x},{start_y}-{end_y}. skip={skip}')
@@ -501,6 +504,8 @@ class CimbarScanner:
         t4_candidates.sort(key=lambda c: c.size)
 
         c4 = t4_candidates[-1]
+        if c4.xrange < (xrange / 2) or c4.yrange < (yrange / 2):
+            return None
         return (c4.xavg, c4.yavg)
 
     def chase_edge(self, start, unit):
