@@ -394,9 +394,8 @@ class CimbarScanner:
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
         max_range = max(xrange, yrange)
-        uncertainty = best_candidates[2].size / best_candidates[0].size
 
-        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range, uncertainty)
+        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range)
 
     def sort_top_to_bottom(self, candidates):
         # calculate distance from candidates. Longest = 2,3
@@ -443,9 +442,9 @@ class CimbarScanner:
             bottom_left = _fix_index(top_left + 1)
 
         candidates = [
-            cs[top_left],
-            cs[top_right],
-            cs[bottom_left],
+            candidates[top_left],
+            candidates[top_right],
+            candidates[bottom_left],
         ]
         return candidates
 
@@ -462,29 +461,34 @@ class CimbarScanner:
         print(t3_candidates)
         print(t4_candidates)
 
-        filtered_candidates, max_range, uncertainty = self.filter_candidates(t4_candidates)
+        filtered_candidates, max_range = self.filter_candidates(t4_candidates)
         print(f'filtered: {filtered_candidates}')
 
-        anchors = self.sort_top_to_bottom(filtered_candidates)
-        anchors = self.add_fourth_corner(anchors, max_range, uncertainty)
-        return CimbarAlignment(anchors)
+        candidates = self.sort_top_to_bottom(filtered_candidates)
+        corners = self.add_fourth_corner(candidates, max_range)
+        return CimbarAlignment(corners)
 
-    def add_fourth_corner(self, anchors, max_range, uncertainty):
+    def add_fourth_corner(self, candidates, max_range):
+        anchors = [(p.xavg, p.yavg) for p in candidates]
         self.scan_ratio = '1:2:2'
 
-        top_edge = numpy.subtract(anchors[1], anchors[0])
-        left_edge = numpy.subtract(anchors[2], anchors[0])
+        top_scalar = candidates[2].max_range / max(candidates[1].max_range, candidates[0].max_range)
+        top_edge = numpy.subtract(anchors[1], anchors[0]) * top_scalar
+        left_scalar = candidates[1].max_range / max(candidates[2].max_range, candidates[0].max_range)
+        left_edge = numpy.subtract(anchors[2], anchors[0]) * left_scalar
+
         bottom_right_guess1 = anchors[2] + top_edge
         bottom_right_guess2 = anchors[1] + left_edge
         bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
+        print(f'bottom right guess: {bottom_right_speculative}')
 
-        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range, uncertainty)
+        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range)
         if fourth:
             anchors.append(fourth)
         return anchors
 
-    def scan_fourth_corner(self, center, xrange, yrange, uncertainty):
-        uncertainty = uncertainty * 4
+    def scan_fourth_corner(self, center, xrange, yrange):
+        uncertainty = 4
         start_y = int(center[1] - (yrange * uncertainty))
         end_y = int(center[1] + (yrange * uncertainty))
         start_x = int(center[0] - (xrange * uncertainty))
