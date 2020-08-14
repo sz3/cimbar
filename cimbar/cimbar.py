@@ -142,11 +142,12 @@ def _get_image_template(width, dark):
 
     suffix = 'dark' if dark else 'light'
     anchor = Image.open(f'bitmap/anchor-{suffix}.png')
+    anchor_br = Image.open(f'bitmap/anchor-secondary-{suffix}.png')
     aw, ah = anchor.size
     img.paste(anchor, (0, 0))
     img.paste(anchor, (0, width-ah))
     img.paste(anchor, (width-aw, 0))
-    img.paste(anchor, (width-aw, width-ah))
+    img.paste(anchor_br, (width-aw, width-ah))
 
     horizontal_guide = Image.open(f'bitmap/guide-horizontal-{suffix}.png')
     gw, _ = horizontal_guide.size

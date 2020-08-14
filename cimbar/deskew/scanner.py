@@ -60,16 +60,22 @@ class Anchor:
 
 
 class ScanState:
-    def __init__(self):
+    RATIO_LIMITS = {
+        '1:1:4': [(3.0, 6.0), (3.0, 6.0)],
+        '1:2:2': [(1.0, 3.0), (0.5, 1.5)],
+    }
+
+    def __init__(self, ratio='1:1:4'):
         self.state = 0
         self.tally = [0]
+        self.limits = self.RATIO_LIMITS[ratio]
 
     def pop_state(self):
         # when state == 6, we need to drop down to state == 4
         self.state -= 2
         self.tally = self.tally[2:]
 
-    def evaluate_state(self, limit_low, limit_high):
+    def evaluate_state(self):
         if self.state != 6:
             return None
         # ratio should be 1:1:4:1:1
@@ -77,16 +83,23 @@ class ScanState:
         for s in ones:
             if not s:
                 return None
+
         center = ones.pop(2)
-        for s in ones:
+        instructions = {
+            ones[0]: self.limits[0],
+            ones[1]: self.limits[1],
+            ones[2]: self.limits[1],
+            ones[3]: self.limits[0],
+        }
+        for s, limits in instructions.items():
             ratio_min = center / (s + 1)
             ratio_max = center / max(1, s - 1)
-            if ratio_max < limit_low or ratio_min > limit_high:
+            if ratio_max < limits[0] or ratio_min > limits[1]:
                 return None
         anchor_width = sum(ones) + center
         return anchor_width
 
-    def process(self, active, limit_low=3.0, limit_high=6.0):
+    def process(self, active):
         # transitions first
         is_transition = (self.state in [0, 2, 4] and active) or (self.state in [1, 3, 5] and not active)
         if is_transition:
@@ -95,7 +108,7 @@ class ScanState:
             self.tally[-1] += 1
 
             if self.state == 6:
-                res = self.evaluate_state(limit_low, limit_high)
+                res = self.evaluate_state()
                 self.pop_state()
                 return res
             return None
@@ -197,6 +210,7 @@ class CimbarScanner:
         self.dark = dark
         self.skip = skip or self.height // 200
         self.cutoff = self.height // 30
+        self.scan_ratio = '1:1:4'
 
     def _test_pixel(self, x, y):
         if self.dark:
@@ -211,7 +225,7 @@ class CimbarScanner:
         else:
             r = (0, self.width)
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         for x in range(*r):
             active = self._test_pixel(x, y)
             res = state.process(active)
@@ -234,7 +248,7 @@ class CimbarScanner:
         else:
             r = (0, self.height)
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         for y in range(*r):
             active = self._test_pixel(xavg, y)
             res = state.process(active)
@@ -264,7 +278,7 @@ class CimbarScanner:
 
         #print(f'diagonally scanning from {start_x},{start_y} to {end_x},{end_y}')
 
-        state = ScanState()
+        state = ScanState(self.scan_ratio)
         x = start_x
         y = start_y
         while x < end_x and y < end_y:
@@ -283,18 +297,24 @@ class CimbarScanner:
         if res:
             yield Anchor(x=x-res, xmax=x, y=y-res, ymax=y)
 
-    def t1_scan_horizontal(self):
+    def t1_scan_horizontal(self, skip=None, start_y=None, end_y=None, r=None):
         '''
         gets a smart answer for Xs
         '''
+        if not skip:
+            skip = self.skip
+        y = start_y or 0
+
+        if not end_y:
+            end_y = self.height
+        else:
+            end_y = min(end_y, self.height)
+
         results = []
-        y = 0
-        y += self.skip
-        while y < self.height:  # eventually != 0?
-            if y > self.height:
-                y = y % self.height
-            results += list(self.horizontal_scan(y))
-            y += self.skip
+        y += skip
+        while y < end_y:
+            results += list(self.horizontal_scan(y, r))
+            y += skip
         return results
 
     def t2_scan_vertical(self, candidates):
@@ -317,7 +337,7 @@ class CimbarScanner:
             results += list(self.diagonal_scan(*range_guess))
         return results
 
-    def t4_confirm_scan(self, candidates):
+    def t4_confirm_scan(self, candidates, merge=True):
         results = []
         for p in candidates:
             xrange = (p.x - p.xrange, p.xmax + p.xrange)
@@ -325,7 +345,7 @@ class CimbarScanner:
             if not xs:
                 continue
             for confirm in xs:
-                if confirm.is_mergeable(p, self.cutoff):
+                if merge and confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
@@ -333,7 +353,7 @@ class CimbarScanner:
             if not ys:
                 continue
             for confirm in ys:
-                if confirm.is_mergeable(p, self.cutoff):
+                if merge and confirm.is_mergeable(p, self.cutoff):
                     p.merge(confirm)
             results.append(p)
 
@@ -363,29 +383,70 @@ class CimbarScanner:
         return average
 
     def filter_candidates(self, candidates):
-        if len(candidates) <= 4:
-            return candidates
+        if len(candidates) < 3:
+            return candidates, None
 
         candidates.sort(key=lambda c: c.size)
-        best_candidates = candidates[-4:]
+        best_candidates = candidates[-3:]
 
         xrange = sum([c.xrange for c in best_candidates])
         yrange = sum([c.yrange for c in best_candidates])
         xrange = xrange // len(best_candidates)
         yrange = yrange // len(best_candidates)
+        max_range = max(xrange, yrange)
 
-        return [c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
+        return ([c for c in best_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2], max_range)
 
     def sort_top_to_bottom(self, candidates):
-        candidates.sort()
-        top_left = candidates[0]
-        p1 = candidates[1]
-        p2 = candidates[2]
-        p1_xoff = abs(p1.xavg - top_left.xavg)
-        p2_xoff = abs(p2.xavg - top_left.xavg)
-        if p2_xoff > p1_xoff:
-            candidates = [top_left, p2, p1, candidates[3]]
-        return [(p.xavg, p.yavg) for p in candidates]
+        # calculate distance from candidates. Longest = 2,3
+        # 2 = clockwise from 1
+        def _fix_index(idx):
+            if idx < 0:
+                idx = 2
+            elif idx > 2:
+                idx = 0
+            return idx
+
+        print(f'sorting {candidates} in tl-tr-bl order.')
+
+        # get edges
+        cs = [
+            (p.xavg, p.yavg) for p in candidates
+        ]
+        edges = [
+            numpy.subtract(cs[1], cs[2]),
+            numpy.subtract(cs[2], cs[0]),
+            numpy.subtract(cs[0], cs[1]),
+        ]
+
+        # find longest edge. This will correspond to the index of the anchor opposite it (thanks to our ordering of `edges`)
+        top_left = 0
+        max_d = 0
+        for i, e in enumerate(edges):
+            dist = e.dot(e)
+            if dist > max_d:
+                max_d = dist
+                top_left = i
+
+        # compare the directions of the incoming/departing edges to figure out which way is clockwise
+        departing_edge = edges[_fix_index(top_left - 1)]
+        incoming_edge = edges[_fix_index(top_left + 1)]
+        incoming_edge = (-incoming_edge[1], incoming_edge[0])  # rotate 90 degrees right
+        overlap = departing_edge - incoming_edge
+
+        if overlap.dot(overlap) < departing_edge.dot(departing_edge):
+            top_right = _fix_index(top_left + 1)
+            bottom_left = _fix_index(top_left - 1)
+        else:
+            top_right = _fix_index(top_left - 1)
+            bottom_left = _fix_index(top_left + 1)
+
+        candidates = [
+            candidates[top_left],
+            candidates[top_right],
+            candidates[bottom_left],
+        ]
+        return candidates
 
     def scan(self):
         # do these need to track all known ranges, so we can approximate bounding lines?
@@ -400,9 +461,56 @@ class CimbarScanner:
         print(t3_candidates)
         print(t4_candidates)
 
-        filtered_candidates = self.filter_candidates(t4_candidates)
+        filtered_candidates, max_range = self.filter_candidates(t4_candidates)
         print(f'filtered: {filtered_candidates}')
-        return CimbarAlignment(self.sort_top_to_bottom(filtered_candidates))
+
+        candidates = self.sort_top_to_bottom(filtered_candidates)
+        corners = self.add_fourth_corner(candidates, max_range)
+        return CimbarAlignment(corners)
+
+    def add_fourth_corner(self, candidates, max_range):
+        anchors = [(p.xavg, p.yavg) for p in candidates]
+        self.scan_ratio = '1:2:2'
+
+        top_scalar = candidates[2].max_range / max(candidates[1].max_range, candidates[0].max_range)
+        top_edge = numpy.subtract(anchors[1], anchors[0]) * top_scalar
+        left_scalar = candidates[1].max_range / max(candidates[2].max_range, candidates[0].max_range)
+        left_edge = numpy.subtract(anchors[2], anchors[0]) * left_scalar
+
+        bottom_right_guess1 = anchors[2] + top_edge
+        bottom_right_guess2 = anchors[1] + left_edge
+        bottom_right_speculative = (bottom_right_guess1 + bottom_right_guess2) // 2
+        print(f'bottom right guess: {bottom_right_speculative}')
+
+        fourth = self.scan_fourth_corner(bottom_right_speculative, max_range, max_range)
+        if fourth:
+            anchors.append(fourth)
+        return anchors
+
+    def scan_fourth_corner(self, center, xrange, yrange):
+        uncertainty = 4
+        start_y = int(center[1] - (yrange * uncertainty))
+        end_y = int(center[1] + (yrange * uncertainty))
+        start_x = int(center[0] - (xrange * uncertainty))
+        end_x = int(center[0] + (xrange * uncertainty))
+
+        skip = self.skip // 2
+        print(f'looking for 4th corner at {start_x}-{end_x},{start_y}-{end_y}. skip={skip}')
+
+        candidates = self.t1_scan_horizontal(skip=skip, start_y=start_y, end_y=end_y, r=(start_x, end_x))
+        t2_candidates = self.t2_scan_vertical(candidates)
+        candidates = [c for c in t2_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
+        if not candidates:
+            return None
+
+        t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        t4_candidates = self.t4_confirm_scan(t3_candidates, merge=False)
+        t4_candidates.sort(key=lambda c: c.size)
+
+        c4 = t4_candidates[-1]
+        if c4.xrange < (xrange / 2) or c4.yrange < (yrange / 2):
+            return None
+        return (c4.xavg, c4.yavg)
 
     def chase_edge(self, start, unit):
         # test 4 points. If we get 2/4, success
