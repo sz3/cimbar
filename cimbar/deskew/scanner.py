@@ -287,7 +287,6 @@ class CimbarScanner:
             if res:
                 ax, axmax = (x-res, x)
                 ay, aymax = (y-res, y)
-                print('confirmed anchor at {}-{},{}-{}'.format(ax, axmax, ay, aymax))
                 yield Anchor(x=ax, xmax=axmax, y=ay, ymax=aymax)
             x += 1
             y += 1
@@ -338,23 +337,41 @@ class CimbarScanner:
         return results
 
     def t4_confirm_scan(self, candidates, merge=True):
+        def _confirm_results(p, res, cutoff):
+            return [
+                c for c in (res or []) if c.is_mergeable(p, cutoff)
+            ]
+
         results = []
         for p in candidates:
             xrange = (p.x - p.xrange, p.xmax + p.xrange)
-            xs = list(self.horizontal_scan(p.yavg, r=xrange))
-            if not xs:
+            yavg = p.yavg
+            for y in [yavg - 1, yavg, yavg + 1]:
+                xs = list(self.horizontal_scan(y, r=xrange))
+                confirms = _confirm_results(p, xs, self.cutoff // 2)
+                if not confirms:
+                    p = None
+                    break
+                if merge:
+                    for c in confirms:
+                        p.merge(c)
+            if not p:
                 continue
-            for confirm in xs:
-                if merge and confirm.is_mergeable(p, self.cutoff):
-                    p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
-            ys = list(self.vertical_scan(p.xavg, r=yrange))
-            if not ys:
+            xavg = p.xavg
+            for x in [xavg - 1, xavg, xavg + 1]:
+                ys = list(self.vertical_scan(x, r=yrange))
+                confirms = _confirm_results(p, ys, self.cutoff // 2)
+                if not confirms:
+                    p = None
+                    break
+                if merge:
+                    for c in confirms:
+                        p.merge(c)
+            if not p:
                 continue
-            for confirm in ys:
-                if merge and confirm.is_mergeable(p, self.cutoff):
-                    p.merge(confirm)
+
             results.append(p)
 
         return self.deduplicate_candidates(results)
@@ -449,8 +466,7 @@ class CimbarScanner:
         return candidates
 
     def scan(self):
-        # do these need to track all known ranges, so we can approximate bounding lines?
-        # also not clear if we should dedup at every step or not
+        self.scan_ratio = '1:1:4'
         candidates = self.t1_scan_horizontal()
         t2_candidates = self.t2_scan_vertical(candidates)
         # if duplicate candidates (e.g. within 10px or so), deduplicate
