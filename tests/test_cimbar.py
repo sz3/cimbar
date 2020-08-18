@@ -26,12 +26,10 @@ def _warp1(src_image, dst_image):
 
 def _warp2(src_image, dst_image):
     img = cv2.imread(src_image)
-    input_pts = [(0, 0), (0, 1023), (1023, 0), (1023, 1023)]
+    input_pts = [(1023, 1023), (1023, 0), (0, 1023), (0, 0)]
     output_pts = [(21, 212), (115, 943), (854, 198), (795, 942)]
     transformer = cv2.getPerspectiveTransform(numpy.float32(input_pts), numpy.float32(output_pts))
     img = cv2.warpPerspective(img, transformer, (1000, 1000))
-    kernel = numpy.ones((2,2), numpy.uint8)
-    img = cv2.dilate(img, kernel)
     img = cv2.GaussianBlur(img,(3,3),0)
     cv2.imwrite(dst_image, img)
 
@@ -51,8 +49,8 @@ class CimbarTest(TestCase):
         encode(cls.src_file, cls.encoded_file, dark=True)
 
         cls.decode_clean = path.join(cls.inputs_dir.name, 'decode-no-ecc-clean.txt')
-        with reed_solomon_stream(cls.src_file, 15) as rss, open(cls.decode_clean, 'wb') as f:
-            f.write(rss.read(8400))
+        with reed_solomon_stream(cls.src_file, 30) as rss, open(cls.decode_clean, 'wb') as f:
+            f.write(rss.read(7500))
 
     @classmethod
     def tearDownClass(cls):
@@ -76,8 +74,8 @@ class CimbarTest(TestCase):
     def validate_output(self, out_path):
         with open(out_path, 'rb') as f:
             contents = f.read()
-        self.assertEqual(len(contents), 8400)
-        self.assertEqual(contents, self._src_data()[:8400])
+        self.assertEqual(len(contents), 7500)
+        self.assertEqual(contents, self._src_data()[:7500])
 
     def validate_grader(self, out_path, target):
         num_bits = evaluate_grader(self.decode_clean, out_path, BITS_PER_OP, True)
@@ -106,7 +104,7 @@ class CimbarTest(TestCase):
         decode(skewed_image, out_no_ecc, dark=True, ecc=0)
         self.validate_grader(out_no_ecc, 2000)
 
-    def test_decode_perspective_bleed(self):
+    def test_decode_perspective_rotate(self):
         skewed_image = self._temp_path('skewed2.jpg')
         _warp2(self.encoded_file, skewed_image)
 

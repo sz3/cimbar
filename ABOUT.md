@@ -11,17 +11,17 @@ The inspirations were:
 2. [txqr](https://github.com/divan/txqr), which uses animated QR codes to transfer data over the phone camera
 3. [Microsoft's HCCB](https://en.wikipedia.org/wiki/High_Capacity_Color_Barcode)
 
-`txqr` achieved a transfer speed of `25kb/s` (though this seems to be a burst rate), which I found very impressive for QR codes. But, with the general feeling of "we can do better than this!", I decided to look into the problem and see how easy it might be to exceed that transfer speed.
+`txqr` achieved a transfer speed of `25kb/s` (though this seems to be a burst rate), which seems very good for QR codes. But, with the general feeling of "we can do better than this!", I decided to look into the problem.
 
 It's worth noting that I would not have created cimbar if HCCB was open source -- I would instead have tried to use it for this purpose. I *might* have written an open source implementation of HCCB, but it wasn't (and still isn't) clear to me what Microsoft wants to do with the technology.
 
 My experiments (including trying and failing to get `jabcode`s to work to my liking) led to a new bar code format. Covid19-induced lockdown led to me spending more time on it than I'd originally envisioned.
 
-## 3 projects is a lot for a proof of concept
+## Is three projects a lot for a proof of concept?
 
 * the three projects are:
-1. [cimbar](https://github.com/sz3/cimbar) (you are here) -- focused on design
-2. [libcimbar](https://github.com/sz3/libcimbar) -- focused on implementation. Optimized C++ code. Also includes a data envelope format built on fountain codes.
+1. [cimbar](https://github.com/sz3/cimbar) (you are here) -- focused on research and design. Not very fast.
+2. [libcimbar](https://github.com/sz3/libcimbar) -- focused on implementation. C++ code. Pretty fast. Also includes a data envelope format built on fountain codes.
 3. [cfc](https://github.com/sz3/libcimbar) -- focused on usage. This is a barebones android app that uses libcimbar to receive files over the camera lens.
 
 My conclusion was that if I was going to create a proof-of-concept implementation of a new bar code format, I would need to *prove* -- demonstrate -- a use case, implausible or otherwise. In this case, the use case was the initial motivation -- hit sustained 100kb/s data transfer rates, or, if not, demonstrate that it was clearly possible (or impossible -- and call the project a bust). So, that is what I did.
