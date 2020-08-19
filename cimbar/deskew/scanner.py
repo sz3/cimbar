@@ -4,6 +4,10 @@ import numpy
 from cimbar.util.geometry import calculate_midpoints
 
 
+def next_power_of_two_plus_one(x):
+    return 2**((x - 1).bit_length()) + 1
+
+
 # should be thought of as a line, not an area
 class Anchor:
     __slots__ = 'x', 'xmax', 'y', 'ymax'
@@ -151,13 +155,14 @@ class EdgeScanState:
 
 def _the_works(img):
     x = int(min(img.shape[0], img.shape[1]) * 0.002)
-    unit = 2**((x - 1).bit_length()) + 1  # closest (ceiling) power of 2, + 1
-    unit = max(3, unit)  # needs to be at least 3
+    blur_unit = next_power_of_two_plus_one(x)
+    blur_unit = max(3, blur_unit)  # needs to be at least 3
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.GaussianBlur(img,(unit,unit),0)
-    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(100,100))
-    img = clahe.apply(img)
-    _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+    img = cv2.GaussianBlur(img,(blur_unit,blur_unit),0)
+
+    x = int(min(img.shape[0], img.shape[1]) * 0.05)
+    thresh_unit = next_power_of_two_plus_one(x)
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, thresh_unit, 0)
     return img
 
 
@@ -287,7 +292,6 @@ class CimbarScanner:
             if res:
                 ax, axmax = (x-res, x)
                 ay, aymax = (y-res, y)
-                print('confirmed anchor at {}-{},{}-{}'.format(ax, axmax, ay, aymax))
                 yield Anchor(x=ax, xmax=axmax, y=ay, ymax=aymax)
             x += 1
             y += 1
@@ -338,23 +342,41 @@ class CimbarScanner:
         return results
 
     def t4_confirm_scan(self, candidates, merge=True):
+        def _confirm_results(p, res, cutoff):
+            return [
+                c for c in (res or []) if c.is_mergeable(p, cutoff)
+            ]
+
         results = []
         for p in candidates:
             xrange = (p.x - p.xrange, p.xmax + p.xrange)
-            xs = list(self.horizontal_scan(p.yavg, r=xrange))
-            if not xs:
+            yavg = p.yavg
+            for y in [yavg - 1, yavg, yavg + 1]:
+                xs = list(self.horizontal_scan(y, r=xrange))
+                confirms = _confirm_results(p, xs, self.cutoff // 2)
+                if not confirms:
+                    p = None
+                    break
+                if merge:
+                    for c in confirms:
+                        p.merge(c)
+            if not p:
                 continue
-            for confirm in xs:
-                if merge and confirm.is_mergeable(p, self.cutoff):
-                    p.merge(confirm)
 
             yrange = (p.y - p.yrange, p.ymax + p.yrange)
-            ys = list(self.vertical_scan(p.xavg, r=yrange))
-            if not ys:
+            xavg = p.xavg
+            for x in [xavg - 1, xavg, xavg + 1]:
+                ys = list(self.vertical_scan(x, r=yrange))
+                confirms = _confirm_results(p, ys, self.cutoff // 2)
+                if not confirms:
+                    p = None
+                    break
+                if merge:
+                    for c in confirms:
+                        p.merge(c)
+            if not p:
                 continue
-            for confirm in ys:
-                if merge and confirm.is_mergeable(p, self.cutoff):
-                    p.merge(confirm)
+
             results.append(p)
 
         return self.deduplicate_candidates(results)
@@ -449,8 +471,7 @@ class CimbarScanner:
         return candidates
 
     def scan(self):
-        # do these need to track all known ranges, so we can approximate bounding lines?
-        # also not clear if we should dedup at every step or not
+        self.scan_ratio = '1:1:4'
         candidates = self.t1_scan_horizontal()
         t2_candidates = self.t2_scan_vertical(candidates)
         # if duplicate candidates (e.g. within 10px or so), deduplicate
@@ -498,15 +519,20 @@ class CimbarScanner:
         print(f'looking for 4th corner at {start_x}-{end_x},{start_y}-{end_y}. skip={skip}')
 
         candidates = self.t1_scan_horizontal(skip=skip, start_y=start_y, end_y=end_y, r=(start_x, end_x))
+        print('4 candidates: {}'.format(candidates))
         t2_candidates = self.t2_scan_vertical(candidates)
+        print('4 t2 candidates: {}'.format(t2_candidates))
         candidates = [c for c in t2_candidates if c.xrange >= xrange / 2 and c.yrange >= yrange / 2]
         if not candidates:
             return None
 
         t3_candidates = self.t3_scan_diagonal(t2_candidates)
+        print('4 t3 candidates: {}'.format(t3_candidates))
         t4_candidates = self.t4_confirm_scan(t3_candidates, merge=False)
         t4_candidates.sort(key=lambda c: c.size)
 
+
+        print('4 t4 candidates: {}'.format(t4_candidates))
         c4 = t4_candidates[-1]
         if c4.xrange < (xrange / 2) or c4.yrange < (yrange / 2):
             return None
