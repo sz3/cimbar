@@ -1,4 +1,4 @@
-### INTRODUCTION | [ABOUT](ABOUT.md) | [LIBCIMBAR](https://github.com/sz3/libcimbar)
+### INTRODUCTION | [ABOUT](ABOUT.md) | [LIBCIMBAR](https://github.com/sz3/libcimbar) | [CFC](https://github.com/sz3/cfc)
 
 ## cimbar: Color Icon Matrix bar codes
 
