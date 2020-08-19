@@ -10,6 +10,8 @@ cimbar is a proof-of-concept 2D data encoding format -- much like [QR Codes](htt
 
 Cimbar encodes data in a grid of symbols (or icons). There are 16 possible symbols per tile (position) on the grid, encoding 4 bits per tile. In addition, 2-3 color bits can be encoded per position on the grid, meaning up to 7 total bits per tile.
 
+![4 bit cimbar encoding](https://github.com/sz3/cimbar-samples/blob/v0.5/docs/encoding.png)
+
 There are multiple color schemes:
 * "dark" mode -- meant for backlit computer screens, with bright tiles on a black background
 * "light" mode -- meant for paper, with dark tiles on a white background
@@ -19,6 +21,12 @@ Cimbar was inspired by [image hashing](https://github.com/JohannesBuchner/imageh
 [Error correction](https://en.wikipedia.org/wiki/Reed%E2%80%93Solomon_error_correction) is applied on the resulting bit stream, and the bit stream itself is interleaved across the image -- that is, adjacent tiles do not contain adjacent data -- to tolerate localized errors in a source image.
 
 ## But, does it really work?
+
+The main constraints cimbar must deal with are:
+* all tiles in the tileset must be sufficient hamming distance away from each other, where *sufficient* is determined by whether the decoder can consistently place blurry or otherwise imperfect tiles in the correct "bucket".
+* all colors in the colorset must be far enough away from each other -- currently as a function of RGB value scaling -- such that color bleeding, reflections, and the like, can be overcome.
+
+In practice, this means that the source image should be around 1000x1000 resolution or greater, with reasonable color correction handled by the camera -- as you'd find in any modern cell phone.
 
 The python cimbar implementation is, like cimbar itself, a research project. It works, but it is not very performant, and does not handle error cases with much grace. [libcimbar](https://github.com/sz3/libcimbar), the C++ implementation, has been much more heavily optimized. The target goals of the proof-of-concept were:
 1. achieve data density on the order of _10kb_ per image.
