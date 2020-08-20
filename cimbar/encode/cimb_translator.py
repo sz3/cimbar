@@ -2,9 +2,6 @@ from os import path
 
 import numpy
 import imagehash
-from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie1976
-from colormath.color_objects import LabColor, sRGBColor
 from PIL import Image
 
 
@@ -78,15 +75,6 @@ def relative_color_diff(c1, c2):
     return (rel1[0] - rel2[0])**2 + (rel1[1] - rel2[1])**2 + (rel1[2] - rel2[2])**2
 
 
-def lab_color(c):
-    rgb = sRGBColor(c[0], c[1], c[2], is_upscaled=True)
-    return convert_color(rgb, LabColor)
-
-
-def cie76_color_diff(c1, c2):
-    return delta_e_cie1976(lab_color(c1), lab_color(c2))
-
-
 class CimbDecoder:
     def __init__(self, dark, symbol_bits, color_bits=0):
         self.dark = dark
@@ -122,10 +110,7 @@ class CimbDecoder:
 
     def _check_color(self, c, d):
         #return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
-        if self.dark:
-            return relative_color_diff(c, d)
-        else:
-            return cie76_color_diff(c, d)
+        return relative_color_diff(c, d)
 
     def _fix_color(self, c, adjust, down):
         c = int((c - down) * adjust)
