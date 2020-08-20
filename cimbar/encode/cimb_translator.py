@@ -2,6 +2,9 @@ from os import path
 
 import numpy
 import imagehash
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie1976
+from colormath.color_objects import LabColor, sRGBColor
 from PIL import Image
 
 
@@ -69,10 +72,19 @@ def relative_color(c):
     return rg, gb, br
 
 
-def color_diff(c1, c2):
+def relative_color_diff(c1, c2):
     rel1 = relative_color(c1)
     rel2 = relative_color(c2)
     return (rel1[0] - rel2[0])**2 + (rel1[1] - rel2[1])**2 + (rel1[2] - rel2[2])**2
+
+
+def lab_color(c):
+    rgb = sRGBColor(c[0], c[1], c[2], is_upscaled=True)
+    return convert_color(rgb, LabColor)
+
+
+def cie76_color_diff(c1, c2):
+    return delta_e_cie1976(lab_color(c1), lab_color(c2))
 
 
 class CimbDecoder:
@@ -110,7 +122,10 @@ class CimbDecoder:
 
     def _check_color(self, c, d):
         #return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
-        return color_diff(c, d)
+        if self.dark:
+            return relative_color_diff(c, d)
+        else:
+            return cie76_color_diff(c, d)
 
     def _fix_color(self, c, adjust, down):
         c = int((c - down) * adjust)
@@ -120,14 +135,25 @@ class CimbDecoder:
 
     def _best_color(self, r, g, b):
         # probably some scaling will be good.
-        max_val = max(r, g, b, 1)
-        min_val = min(r, g, b, 48)
-        if min_val >= max_val:
-            min_val = 0
-        adjust = 255 / (max_val - min_val)
-        r = self._fix_color(r, adjust, min_val)
-        g = self._fix_color(g, adjust, min_val)
-        b = self._fix_color(b, adjust, min_val)
+        if self.dark:
+            max_val = max(r, g, b, 1)
+            min_val = min(r, g, b, 48)
+            if min_val >= max_val:
+                min_val = 0
+            adjust = 255 / (max_val - min_val)
+            r = self._fix_color(r, adjust, min_val)
+            g = self._fix_color(g, adjust, min_val)
+            b = self._fix_color(b, adjust, min_val)
+        else:
+            min_val = min(r, g, b)
+            max_val = max(r, g, b, 1)
+            if max_val - min_val < 20:
+                r = g = b = 0
+            else:
+                adjust = 255 / (max_val - min_val)
+                r = self._fix_color(r, adjust, min_val)
+                g = self._fix_color(g, adjust, min_val)
+                b = self._fix_color(b, adjust, min_val)
 
         best_fit = 0
         best_distance = 1000000
