@@ -1,4 +1,4 @@
-### [INTRODUCTION](https://github.com/sz3/cimbar) | ABOUT | [LIBCIMBAR](https://github.com/sz3/libcimbar)
+### [INTRODUCTION](https://github.com/sz3/cimbar) | ABOUT | [CFC](https://github.com/sz3/cfc) | [LIBCIMBAR](https://github.com/sz3/libcimbar)
 
 ## What is cimbar?
 
