@@ -4,7 +4,7 @@ from heapq import heappush, heappop
 
 class cell_drift:
     pairs = [(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
-    limit = 2
+    limit = 7
 
     def __init__(self, x=0, y=0):
         self.x = x
