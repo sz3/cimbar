@@ -123,4 +123,4 @@ class CimbarTest(TestCase):
         decode(warped_image, warped_bits, dark=True, ecc=0, auto_dewarp=False)
 
         num_bits = evaluate_grader(clean_bits, warped_bits, BITS_PER_OP, True)
-        self.assertLess(num_bits, 300)
+        self.assertLess(num_bits, 350)
