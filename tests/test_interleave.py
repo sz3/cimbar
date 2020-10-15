@@ -12,10 +12,10 @@ class InterleaveTest(TestCase):
         a = a*3
 
         res = list(interleave(a, 10))
-        self.assertEquals(res, sorted(a))
+        self.assertEqual(res, sorted(a))
 
         res = list(interleave(a, 5, index=True))
-        self.assertEquals(res, [
+        self.assertEqual(res, [
             (0, 0),
             (5, 5),
             (0, 10),
@@ -56,14 +56,14 @@ class InterleaveTest(TestCase):
         transformed = list(interleave(a, 5))
 
         b = [transformed[lookup[i]] for i, _ in enumerate(transformed)]
-        self.assertEquals(a, b)
-        self.assertEquals(block_size, 6)
+        self.assertEqual(a, b)
+        self.assertEqual(block_size, 6)
 
     def test_interleave_partition(self):
         a = list(range(20))
 
         res = list(interleave(a, 5, partitions=2))
-        self.assertEquals(res, [
+        self.assertEqual(res, [
             0, 5, 1, 6, 2, 7, 3, 8, 4, 9,
             10, 15, 11, 16, 12, 17, 13, 18, 14, 19
         ])
