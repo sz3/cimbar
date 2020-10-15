@@ -11,7 +11,6 @@ install:
     - pip install --upgrade coveralls
 
 script:
-    - ls -lR
     - coverage run -m unittest
 
 
