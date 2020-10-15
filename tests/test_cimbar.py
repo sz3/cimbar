@@ -111,3 +111,16 @@ class CimbarTest(TestCase):
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
         decode(skewed_image, out_no_ecc, dark=True, ecc=0)
         self.validate_grader(out_no_ecc, 4000)
+
+    def test_decode_sample(self):
+        clean_image = 'samples/6bit/4color_ecc30_0.png'
+        warped_image = 'samples/6bit/4_30_802.jpg'
+
+        clean_bits = self._temp_path('outfile_clean.txt')
+        decode(clean_image, clean_bits, dark=True, ecc=0)
+
+        warped_bits = self._temp_path('outfile_warped.txt')
+        decode(warped_image, warped_bits, dark=True, ecc=0)
+
+        num_bits = evaluate_grader(clean_bits, warped_bits, BITS_PER_OP, True)
+        self.assertLess(num_bits, 300)
