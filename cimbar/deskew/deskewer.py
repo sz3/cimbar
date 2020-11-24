@@ -38,7 +38,9 @@ def _naive_radial_undistort(img, distortion_factor):
     cam[0,0] = width / 4  # "good enough" focal length
     cam[1,1] = height / 4
 
-    return cv2.undistort(img, cam, distCoeff)
+    optimal_mat, _ = cv2.getOptimalNewCameraMatrix(cam, distCoeff, (height, width), 0)
+    newimage = numpy.matrix([])
+    return cv2.undistort(img, cam, distCoeff, newimage, optimal_mat)
 
 
 def distance(a, b):

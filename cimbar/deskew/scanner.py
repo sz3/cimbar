@@ -162,7 +162,9 @@ def _the_works(img):
 
     x = int(min(img.shape[0], img.shape[1]) * 0.05)
     thresh_unit = next_power_of_two_plus_one(x)
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, thresh_unit, 0)
+    #img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, thresh_unit, 0)
+
+    ret3,img = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return img
 
 
