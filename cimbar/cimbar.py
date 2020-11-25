@@ -4,8 +4,9 @@
 
 Usage:
   ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark | --light]
-              [--deskew=<0-2>] [--ecc=<0-100>] [--force-preprocess]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light] [--ecc=<0-100>]
+              [--deskew=<0-2>] [--ecc=<0-150>] [--fountain] [--force-preprocess]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light]
+                       [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -15,14 +16,15 @@ Examples:
 Options:
   -h --help                        Show this help.
   --version                        Show version.
-  --dst_data=<filename>            For decoding. Where to store decoded data.
-  --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
+  --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_image=<filename>           For decoding. Image to try to decode
+  --dst_data=<filename>            For decoding. Where to store decoded data.
+  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
+  -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
-  --ecc=<0-150>                    Reed solomon error correction level. 0 is no ecc. [default: 30]
   --force-preprocess               Always run sharpening filters on image before decoding.
 """
 from os import path
@@ -37,6 +39,8 @@ from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder
 from cimbar.encode.rss import reed_solomon_stream
+from cimbar.fountain.fountain_decoder_stream import fountain_decoder_stream
+from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
@@ -52,6 +56,7 @@ CELLS_OFFSET = 8
 ECC = 30
 INTERLEAVE_BLOCKS = 155
 INTERLEAVE_PARTITIONS = 2
+FOUNTAIN_BLOCKS = 10
 
 
 def get_deskew_params(level):
@@ -60,6 +65,10 @@ def get_deskew_params(level):
         'deskew': level,
         'auto_dewarp': level >= 2,
     }
+
+
+def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
+    return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
@@ -124,11 +133,14 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, deskew=True, auto_dewarp=True):
+def decode(src_image, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
 
-    rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
+    # set up the outstream: image -> reedsolomon -> fountain -> zstd_decompress -> raw bytes
+    fds = fountain_decoder_stream(outfile, _fountain_chunk_size(ecc)) if fountain else open(outfile, 'wb')
+    rss = reed_solomon_stream(fds, ecc, mode='write') if ecc else fds
+
     with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
         decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
         for i, bits in sorted(decoding.items()):
@@ -163,19 +175,24 @@ def _get_image_template(width, dark):
     return img
 
 
-def encode_iter(src_data, ecc):
-    rss = reed_solomon_stream(src_data, ecc) if ecc else open(src_data, 'rb')
-    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP) as f:
+def encode_iter(src_data, ecc, fountain):
+    # various checks to set up the instream.
+    # the hierarchy is raw bytes -> zstd -> fountain -> reedsolomon -> image
+    fes = fountain_encoder_stream(src_data, _fountain_chunk_size(ecc)) if fountain else open(src_data, 'rb')
+    rss = reed_solomon_stream(fes, ecc) if ecc else fes
+    read_size = _fountain_chunk_size(ecc) if fountain else 16384
+
+    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP, read_size=read_size) as f:
         cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
         for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
             bits = f.read()
             yield bits, x, y
 
 
-def encode(src_data, dst_image, dark=False, ecc=ECC):
+def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
     img = _get_image_template(TOTAL_SIZE, dark)
     ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    for bits, x, y in encode_iter(src_data, ecc):
+    for bits, x, y in encode_iter(src_data, ecc, fountain):
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
     img.save(dst_image)
@@ -186,18 +203,19 @@ def main():
 
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
+    fountain = bool(args.get('--fountain'))
 
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
         dst_image = args['<dst_image>'] or args['--dst_image']
-        encode(src_data, dst_image, dark, ecc)
+        encode(src_data, dst_image, dark, ecc, fountain)
         return
 
     deskew = get_deskew_params(args.get('--deskew'))
     force_preprocess = args.get('--force-preprocess')
     src_image = args['<src_image>'] or args['--src_image']
     dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, force_preprocess, **deskew)
+    decode(src_image, dst_data, dark, ecc, fountain, force_preprocess, **deskew)
 
 
 if __name__ == '__main__':

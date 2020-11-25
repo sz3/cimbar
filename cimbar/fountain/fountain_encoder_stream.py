@@ -4,6 +4,7 @@ from .header import fountain_header
 class fountain_encoder_stream:
     def __init__(self, f, chunk_size, encode_id=0):
         self.buffer = b''
+        self.read_size = chunk_size
         self.chunk_size = chunk_size - fountain_header.length
         self.encode_id = encode_id
 
@@ -18,7 +19,6 @@ class fountain_encoder_stream:
         return self.f.closed
 
     def __enter__(self):
-        self._load()
         return self
 
     def __exit__(self, type, value, traceback):
@@ -36,7 +36,10 @@ class fountain_encoder_stream:
     def _header(self, chunk_id):
         return bytes(fountain_header(self.encode_id, self.len, chunk_id))
 
-    def read(self):
+    def read(self, max_bytes):
+        if max_bytes % self.read_size != 0:
+            raise Exception(f'{max_bytes} must be a multiple of {self.read_size}')
+
         bites = b''
         while len(bites) < self.chunk_size:
             bites = self.fountain.encode(self.chunk_id)

@@ -15,7 +15,6 @@ class fountain_decoder_stream:
         return self.f.closed
 
     def __enter__(self):
-        self._load()
         return self
 
     def __exit__(self, type, value, traceback):
