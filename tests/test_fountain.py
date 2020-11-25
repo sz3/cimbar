@@ -3,6 +3,7 @@ from os import path
 from unittest import TestCase
 
 from cimbar.fountain.header import fountain_header
+from cimbar.fountain.fountain_decoder_stream import fountain_decoder_stream
 from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
 
 
@@ -50,3 +51,23 @@ class FountainTest(TestCase):
         r = fes.read()
 
         self.assertEqual(b'\x00\x00\x03\xe8\x00\x00' + data[:394], r)
+
+    def test_round_trip(self):
+        data = b'0123456789' * 100
+        inbuff = BytesIO(data)
+        fes = fountain_encoder_stream(inbuff, 400)
+
+        outbuff = BytesIO()
+        dec = fountain_decoder_stream(outbuff, len(data), 400)
+
+        r = fes.read()
+        self.assertFalse(dec.write(r))
+
+        r = fes.read()
+        self.assertFalse(dec.write(r))
+
+        r = fes.read()
+        self.assertTrue(dec.write(r))
+
+        outbuff.seek(0)
+        self.assertEqual(data, outbuff.read())
