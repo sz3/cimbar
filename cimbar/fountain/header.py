@@ -17,11 +17,16 @@ class fountain_header:
             self.chunk_id = chunk_id
 
     def __bytes__(self):
-        return int_to_bytes(self.encode_id, 1) + int_to_bytes(self.total_size, 3) + int_to_bytes(self.chunk_id, 2)
+        eid = self.encode_id + ((self.total_size & 0x1000000) >> 17)
+        sz = self.total_size & 0xFFFFFF
+        return int_to_bytes(eid, 1) + int_to_bytes(sz, 3) + int_to_bytes(self.chunk_id, 2)
 
     @classmethod
     def from_encoded(cls, encoded_bytes):
         encode_id = int_from_bytes(encoded_bytes[0:1])
         total_size = int_from_bytes(encoded_bytes[1:4])
         chunk_id = int_from_bytes(encoded_bytes[4:6])
+
+        total_size = total_size | ((encode_id & 0x80) << 17)
+        encode_id = encode_id & 0x7F
         return encode_id, total_size, chunk_id

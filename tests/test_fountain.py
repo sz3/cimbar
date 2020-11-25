@@ -20,11 +20,26 @@ class FountainHeaderTest(TestCase):
         self.assertEqual(1024, f.total_size)
         self.assertEqual(3, f.chunk_id)
 
-    def test_header_decode_2(self):
+    def test_header_decode_consistency(self):
         f = fountain_header(b'\x0a\x07\x08\x09\x00\x00')
         self.assertEqual(10, f.encode_id)
         self.assertEqual(0x070809, f.total_size)
         self.assertEqual(0, f.chunk_id)
+
+    def test_header_encode_bigfile(self):
+        fe = fountain_header(2, 0x1FFFFFF, 3)
+        self.assertEqual(b'\x82\xff\xff\xff\x00\x03', bytes(fe))
+
+    def test_header_decode_bigfile(self):
+
+        f = fountain_header(b'\x81\x07\x08\x09\x00\x00')
+        self.assertEqual(1, f.encode_id)
+        self.assertEqual(0x1070809, f.total_size)
+        self.assertEqual(0, f.chunk_id)
+
+        # round trip
+        fe = fountain_header(1, 0x1070809, 0)
+        self.assertEqual(b'\x81\x07\x08\x09\x00\x00', bytes(fe))
 
 
 class FountainTest(TestCase):
