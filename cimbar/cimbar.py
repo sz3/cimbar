@@ -181,21 +181,35 @@ def encode_iter(src_data, ecc, fountain):
     fes = fountain_encoder_stream(src_data, _fountain_chunk_size(ecc)) if fountain else open(src_data, 'rb')
     rss = reed_solomon_stream(fes, ecc) if ecc else fes
     read_size = _fountain_chunk_size(ecc) if fountain else 16384
+    read_count = (fes.len // read_size) * FOUNTAIN_BLOCKS * 2 if fountain else 1
 
-    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP, read_size=read_size) as f:
-        cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-        for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
-            bits = f.read()
-            yield bits, x, y
+    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP, read_size=read_size, read_count=read_count) as f:
+        frame_num = 0
+        while f.read_count > 0:
+            cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+            for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
+                bits = f.read()
+                yield bits, x, y, frame_num
+            frame_num += 1
 
 
 def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
-    img = _get_image_template(TOTAL_SIZE, dark)
+    def save_frame(img, frame):
+        if img:
+            img.save(f'{dst_image}.{frame}.png')
+
+    img = None
+    frame = None
     ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    for bits, x, y in encode_iter(src_data, ecc, fountain):
+    for bits, x, y, frame_num in encode_iter(src_data, ecc, fountain):
+        if frame != frame_num:  # save
+            save_frame(img, frame)
+            img = _get_image_template(TOTAL_SIZE, dark)
+            frame = frame_num
+
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
-    img.save(dst_image)
+    save_frame(img, frame)
 
 
 def main():

@@ -6,7 +6,7 @@ MAX_ENCODING = 16384
 
 
 class bit_file:
-    def __init__(self, f, bits_per_op, mode='read', read_size=MAX_ENCODING):
+    def __init__(self, f, bits_per_op, mode='read', read_size=MAX_ENCODING, read_count=1):
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
         self.mode = mode
@@ -18,8 +18,9 @@ class bit_file:
             self.f = f
         self.bits_per_op = bits_per_op
         self.stream = BitStream()
-        if mode == 'read':
-            self.stream.append(Bits(bytes=self.f.read(read_size)))
+
+        self.read_size = read_size
+        self.read_count = read_count
 
     def __enter__(self):
         return self
@@ -39,6 +40,11 @@ class bit_file:
         self.stream.append(bits)
 
     def read(self):
+        if self.read_count and self.stream.bitpos == self.stream.length:
+            self.stream.clear()
+            self.stream.append(Bits(bytes=self.f.read(self.read_size)))
+            self.read_count -= 1
+
         try:
             bits = self.stream.read(f'uint:{self.bits_per_op}')
         except bitstring.ReadError:
