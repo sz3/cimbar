@@ -58,7 +58,7 @@ class FountainTest(TestCase):
         fes = fountain_encoder_stream(inbuff, 400)
 
         outbuff = BytesIO()
-        dec = fountain_decoder_stream(outbuff, len(data), 400)
+        dec = fountain_decoder_stream(outbuff, 400)
 
         r = fes.read()
         self.assertFalse(dec.write(r))

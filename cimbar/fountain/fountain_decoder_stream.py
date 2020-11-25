@@ -1,14 +1,14 @@
 from .header import fountain_header
 
 class fountain_decoder_stream:
-    def __init__(self, f, total_size, chunk_size):
+    def __init__(self, f, chunk_size):
         self.write_size = chunk_size
         self.chunk_size = chunk_size - fountain_header.length
         if isinstance(f, str):
             self.f = open(f, 'wb')
         else:
             self.f = f
-        self._reset(total_size)
+        self.fountain = None
 
     @property
     def closed(self):
@@ -32,8 +32,11 @@ class fountain_decoder_stream:
             raise Exception(f'{len(buffer)} must be a multiple of {self.write_size}')
 
         # split buffer into header,chunk
-        # get chunk_id from header
+        # get chunk_id and total_size from header
         hdr = fountain_header(buffer[0:fountain_header.length])
+
+        if not self.fountain:
+            self._reset(hdr.total_size)
 
         res = self.fountain.decode(hdr.chunk_id, buffer[fountain_header.length:])
         if not res:
