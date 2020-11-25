@@ -9,6 +9,8 @@ class fountain_decoder_stream:
         else:
             self.f = f
         self.fountain = None
+        self.buffer = b''
+        self.done = False
 
     @property
     def closed(self):
@@ -19,7 +21,7 @@ class fountain_decoder_stream:
 
     def __exit__(self, type, value, traceback):
         if not self.f.closed:
-            with self.f:  # close file
+            with self.f:
                 pass
 
     def _reset(self, total_size):
@@ -27,8 +29,15 @@ class fountain_decoder_stream:
         self.fountain = decoder(total_size, self.chunk_size)
 
     def write(self, buffer):
-        if len(buffer) % self.write_size != 0:
-            raise Exception(f'{len(buffer)} must be a multiple of {self.write_size}')
+        if self.done:
+            return True
+
+        self.buffer += buffer
+        if len(self.buffer) < self.write_size:
+            return False
+
+        buffer = self.buffer[0:self.write_size]
+        self.buffer = self.buffer[self.write_size:]
 
         # split buffer into header,chunk
         # get chunk_id and total_size from header
@@ -42,4 +51,5 @@ class fountain_decoder_stream:
             return False
 
         self.f.write(res)
+        self.done = True
         return True

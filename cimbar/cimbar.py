@@ -138,8 +138,9 @@ def decode(src_image, outfile, dark=False, ecc=ECC, fountain=False, force_prepro
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
 
     # set up the outstream: image -> reedsolomon -> fountain -> zstd_decompress -> raw bytes
+    on_rss_failure = b'' if fountain else None
     fds = fountain_decoder_stream(outfile, _fountain_chunk_size(ecc)) if fountain else open(outfile, 'wb')
-    rss = reed_solomon_stream(fds, ecc, mode='write') if ecc else fds
+    rss = reed_solomon_stream(fds, ecc, mode='write', on_failure=on_rss_failure) if ecc else fds
 
     with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
         decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
@@ -196,7 +197,8 @@ def encode_iter(src_data, ecc, fountain):
 def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
     def save_frame(img, frame):
         if img:
-            img.save(f'{dst_image}.{frame}.png')
+            name = dst_image if not frame else f'{dst_image}.{frame}.png'
+            img.save(name)
 
     img = None
     frame = None

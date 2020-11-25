@@ -48,7 +48,7 @@ class FountainTest(TestCase):
         inbuff = BytesIO(data)
 
         fes = fountain_encoder_stream(inbuff, 400)
-        r = fes.read()
+        r = fes.read(400)
 
         self.assertEqual(b'\x00\x00\x03\xe8\x00\x00' + data[:394], r)
 
@@ -60,13 +60,13 @@ class FountainTest(TestCase):
         outbuff = BytesIO()
         dec = fountain_decoder_stream(outbuff, 400)
 
-        r = fes.read()
+        r = fes.read(400)
         self.assertFalse(dec.write(r))
 
-        r = fes.read()
+        r = fes.read(400)
         self.assertFalse(dec.write(r))
 
-        r = fes.read()
+        r = fes.read(400)
         self.assertTrue(dec.write(r))
 
         outbuff.seek(0)
