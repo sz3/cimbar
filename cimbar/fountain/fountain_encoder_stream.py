@@ -1,32 +1,18 @@
 
-
-def int_to_bytes(n):
-    return n.to_bytes((n.bit_length() + 7) // 8, 'big')
+from .header import fountain_header
 
 
-def int_from_bytes(bites):
-    return int.from_bytes(bites, 'big')
-
-
-class fountain_header:
-    pass
-
-
-class fountain_stream:
-    def __init__(self, f, chunk_size, f_size=None, mode='read'):
-        if mode not in ['read', 'write']:
-            raise Exception('bad bit_file mode. Try "read" or "write"')
-        self.mode = mode
-
+class fountain_encoder_stream:
+    def __init__(self, f, chunk_size, encode_id=0):
         self.buffer = b''
-        self.chunk_size = chunk_size
+        self.chunk_size = chunk_size - fountain_header.length
+        self.encode_id = encode_id
 
         if isinstance(f, str):
-            fmode = 'wb' if mode == 'write' else 'rb'
-            self.f = open(f, fmode)
+            self.f = open(f, 'rb')
         else:
             self.f = f
-        self._load(f_size)
+        self._reset()
 
     @property
     def closed(self):
@@ -41,32 +27,19 @@ class fountain_stream:
             with self.f:  # close file
                 pass
 
-    # split this into fountain_encoder_stream and fountain_decoder_stream?
-    # the if blocks aren't helping us enough?
-    def _load(self, f_size=None):
-        from pywirehair import encoder, decoder
-        if self.mode == 'write':
-            contents = self.f.read()
-            self.fountain = encoder(contents, self.chunk_size)
-            self.chunk_id = 0
-            self.len = len(contents)
-        else:
-            self.fountain = decoder(f_size)
+    def _reset(self):
+        from pywirehair import encoder
+        contents = self.f.read()
+        self.fountain = encoder(contents, self.chunk_size)
+        self.chunk_id = 0
+        self.len = len(contents)
 
     def _header(self, chunk_id):
-        return b''
-
-    def write(self, buffer):
-        if len(buffer) % self.chunk_size != 0:
-            raise Exception(f'{len(buffer)} must be a multiple of {self.chunk_size}')
-
-        # split buffer into header,chunk
-        # get chunk_id from header
-        self.fountain.decode(chunk_id, buffer)
+        return bytes(fountain_header(self.encode_id, self.len, chunk_id))
 
     def read(self):
         bites = b''
         while len(bites) < self.chunk_size:
             bites = self.fountain.encode(self.chunk_id)
             self.chunk_id += 1
-        return bites
+        return self._header(self.chunk_id - 1) + bites

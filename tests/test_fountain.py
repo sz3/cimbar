@@ -7,7 +7,7 @@ from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..'))
-
+SAMPLE_FILE = path.join(CIMBAR_ROOT, 'LICENSE')
 
 
 class FountainHeaderTest(TestCase):
@@ -31,7 +31,6 @@ class FountainHeaderTest(TestCase):
         self.assertEqual(b'\x82\xff\xff\xff\x00\x03', bytes(fe))
 
     def test_header_decode_bigfile(self):
-
         f = fountain_header(b'\x81\x07\x08\x09\x00\x00')
         self.assertEqual(1, f.encode_id)
         self.assertEqual(0x1070809, f.total_size)
@@ -43,6 +42,11 @@ class FountainHeaderTest(TestCase):
 
 
 class FountainTest(TestCase):
-    def test_encode_decode(self):
-        self.assertFalse(True)
+    def test_encode(self):
+        data = b'0123456789' * 100
+        inbuff = BytesIO(data)
 
+        fes = fountain_encoder_stream(inbuff, 400)
+        r = fes.read()
+
+        self.assertEqual(b'\x00\x00\x03\xe8\x00\x00' + data[:394], r)

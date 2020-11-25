@@ -8,6 +8,8 @@ def int_from_bytes(bites):
 
 
 class fountain_header:
+    length = 6
+
     def __init__(self, encode_id, total_size=None, chunk_id=None):
         if total_size is None:
             self.encode_id, self.total_size, self.chunk_id = self.from_encoded(encode_id)
