@@ -39,8 +39,6 @@ from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder
 from cimbar.encode.rss import reed_solomon_stream
-from cimbar.fountain.fountain_decoder_stream import fountain_decoder_stream
-from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
@@ -106,6 +104,18 @@ def _preprocess_for_decode(img):
     return img
 
 
+def _get_decoder_stream(outfile, ecc, fountain):
+    # set up the outstream: image -> reedsolomon -> fountain -> zstd_decompress -> raw bytes
+    f = open(outfile, 'wb')
+    if fountain:
+        import zstandard as zstd
+        from cimbar.fountain.fountain_decoder_stream import fountain_decoder_stream
+        decompressor = zstd.ZstdDecompressor().stream_writer(f)
+        f = fountain_decoder_stream(decompressor, _fountain_chunk_size(ecc))
+    on_rss_failure = b'' if fountain else None
+    return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
+
+
 def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
     should_preprocess = force_preprocess
     tempdir = None
@@ -136,13 +146,8 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
 def decode(src_image, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
-
-    # set up the outstream: image -> reedsolomon -> fountain -> zstd_decompress -> raw bytes
-    on_rss_failure = b'' if fountain else None
-    fds = fountain_decoder_stream(outfile, _fountain_chunk_size(ecc)) if fountain else open(outfile, 'wb')
-    rss = reed_solomon_stream(fds, ecc, mode='write', on_failure=on_rss_failure) if ecc else fds
-
-    with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
+    dstream = _get_decoder_stream(outfile, ecc, fountain)
+    with dstream as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
         decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
         for i, bits in sorted(decoding.items()):
             block = interleave_lookup[i] // block_size
@@ -176,15 +181,29 @@ def _get_image_template(width, dark):
     return img
 
 
-def encode_iter(src_data, ecc, fountain):
+def _get_encoder_stream(src, ecc, fountain, compression_level=6):
     # various checks to set up the instream.
     # the hierarchy is raw bytes -> zstd -> fountain -> reedsolomon -> image
-    fes = fountain_encoder_stream(src_data, _fountain_chunk_size(ecc)) if fountain else open(src_data, 'rb')
-    rss = reed_solomon_stream(fes, ecc) if ecc else fes
-    read_size = _fountain_chunk_size(ecc) if fountain else 16384
-    read_count = (fes.len // read_size) * FOUNTAIN_BLOCKS * 2 if fountain else 1
+    f = open(src, 'rb')
+    if fountain:
+        import zstandard as zstd
+        from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
+        reader = zstd.ZstdCompressor(level=compression_level).stream_reader(f)
+        f = fountain_encoder_stream(reader, _fountain_chunk_size(ecc))
+    estream = reed_solomon_stream(f, ecc) if ecc else f
 
-    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP, read_size=read_size, read_count=read_count) as f:
+    read_size = _fountain_chunk_size(ecc) if fountain else 16384
+    read_count = (f.len // read_size) * 2 if fountain else 1
+    params = {
+        'read_size': read_size,
+        'read_count': read_count,
+    }
+    return estream, params
+
+
+def encode_iter(src_data, ecc, fountain):
+    estream, params = _get_encoder_stream(src_data, ecc, fountain)
+    with estream as instream, bit_file(instream, bits_per_op=BITS_PER_OP, **params) as f:
         frame_num = 0
         while f.read_count > 0:
             cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)

@@ -5,4 +5,5 @@ numpy
 opencv-python
 pillow
 reedsolo
+zstandard
 https://github.com/sz3/pywirehair/archive/master.zip
