@@ -3,9 +3,9 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark | --light]
-              [--deskew=<0-2>] [--ecc=<0-150>] [--fountain] [--force-preprocess]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light]
+  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--deskew=<0-2>] [--ecc=<0-150>] [--fountain]
+                         [--force-preprocess]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
                        [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
@@ -17,14 +17,12 @@ Options:
   -h --help                        Show this help.
   --version                        Show version.
   --src_data=<filename>            For encoding. Data to encode.
-  --dst_image=<filename>           For encoding. Where to store encoded image.
-  --src_image=<filename>           For decoding. Image to try to decode
-  --dst_data=<filename>            For decoding. Where to store decoded data.
+  -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
   -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
+  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --force-preprocess               Always run sharpening filters on image before decoding.
 """
 from os import path
@@ -143,15 +141,17 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
+def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
-    with dstream as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
-        decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
-        for i, bits in sorted(decoding.items()):
-            block = interleave_lookup[i] // block_size
-            iw.write(bits, block)
+    with dstream as outstream:
+        for imgf in src_images:
+            with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
+                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, deskew, auto_dewarp)}
+                for i, bits in sorted(decoding.items()):
+                    block = interleave_lookup[i] // block_size
+                    iw.write(bits, block)
 
 
 def _get_image_template(width, dark):
@@ -242,15 +242,15 @@ def main():
 
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
-        dst_image = args['<dst_image>'] or args['--dst_image']
+        dst_image = args['<output>'] or args['--output']
         encode(src_data, dst_image, dark, ecc, fountain)
         return
 
     deskew = get_deskew_params(args.get('--deskew'))
     force_preprocess = args.get('--force-preprocess')
-    src_image = args['<src_image>'] or args['--src_image']
-    dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, fountain, force_preprocess, **deskew)
+    src_images = args['<IMAGES>']
+    dst_data = args['<output>'] or args['--output']
+    decode(src_images, dst_data, dark, ecc, fountain, force_preprocess, **deskew)
 
 
 if __name__ == '__main__':
