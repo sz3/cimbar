@@ -6,7 +6,7 @@ MAX_ENCODING = 16384
 
 
 class bit_file:
-    def __init__(self, f, bits_per_op, mode='read', read_size=MAX_ENCODING):
+    def __init__(self, f, bits_per_op, mode='read', keep_open=False, read_size=MAX_ENCODING, read_count=1):
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
         self.mode = mode
@@ -14,12 +14,15 @@ class bit_file:
         if isinstance(f, str):
             fmode = 'wb' if mode == 'write' else 'rb'
             self.f = open(f, fmode)
+            self.keep_open = False
         else:
             self.f = f
+            self.keep_open = keep_open  # determines whether __exit__ is a flush()+close(), or just a flush()
         self.bits_per_op = bits_per_op
         self.stream = BitStream()
-        if mode == 'read':
-            self.stream.append(Bits(bytes=self.f.read(read_size)))
+
+        self.read_size = read_size
+        self.read_count = read_count
 
     def __enter__(self):
         return self
@@ -27,7 +30,7 @@ class bit_file:
     def __exit__(self, type, value, traceback):
         if self.mode == 'write' and not self.f.closed:
             self.save()
-        if not self.f.closed:
+        if not self.keep_open and not self.f.closed:
             with self.f:  # close file
                 pass
 
@@ -39,6 +42,11 @@ class bit_file:
         self.stream.append(bits)
 
     def read(self):
+        if self.read_count and self.stream.bitpos == self.stream.length:
+            self.stream.clear()
+            self.stream.append(Bits(bytes=self.f.read(self.read_size)))
+            self.read_count -= 1
+
         try:
             bits = self.stream.read(f'uint:{self.bits_per_op}')
         except bitstring.ReadError:

@@ -51,13 +51,14 @@ python -m cimbar.cimbar --encode myinputfile.txt encoded.png
 
 ```
 python -m cimbar.cimbar encoded.png myoutputfile.txt
+python -m cimbar.cimbar /tmp/encoded.png -o /tmp/myoutputfile.txt
 ```
 
 There are also some utility scripts, such as the one to measure bit errors:
 
 ```
-python -m cimbar.cimbar --deskew=0 --ecc=0 encoded.png clean.txt
-python -m cimbar.cimbar --ecc=0 camera/001.jpg decode.txt
+python -m cimbar.cimbar encoded.png -o clean.txt --deskew=0 --ecc=0
+python -m cimbar.cimbar camera/001.jpg -o decode.txt --ecc=0
 python -m cimbar.grader clean.txt decode.txt
 ```
 

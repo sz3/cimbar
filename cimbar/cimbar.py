@@ -3,26 +3,26 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py (<src_image> | --src_image=<filename>) (<dst_data> | --dst_data=<filename>) [--dark | --light]
-              [--deskew=<0-2>] [--ecc=<0-100>] [--force-preprocess]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<dst_image> | --dst_image=<filename>) [--dark | --light] [--ecc=<0-100>]
+  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--deskew=<0-2>] [--ecc=<0-150>] [--fountain]
+                         [--force-preprocess]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
+                       [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
 Examples:
   python -m cimbar --encode myfile.txt cimb-code.png
-  python -m cimbar cimb-code.png myfile.txt
+  python -m cimbar cimb-code.png -o myfile.txt
 
 Options:
   -h --help                        Show this help.
   --version                        Show version.
-  --dst_data=<filename>            For decoding. Where to store decoded data.
-  --dst_image=<filename>           For encoding. Where to store encoded image.
   --src_data=<filename>            For encoding. Data to encode.
-  --src_image=<filename>           For decoding. Image to try to decode
+  -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
+  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
+  -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should be 0 or default, except for testing. [default: 2]
-  --ecc=<0-150>                    Reed solomon error correction level. 0 is no ecc. [default: 30]
+  --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --force-preprocess               Always run sharpening filters on image before decoding.
 """
 from os import path
@@ -52,6 +52,7 @@ CELLS_OFFSET = 8
 ECC = 30
 INTERLEAVE_BLOCKS = 155
 INTERLEAVE_PARTITIONS = 2
+FOUNTAIN_BLOCKS = 10
 
 
 def get_deskew_params(level):
@@ -60,6 +61,10 @@ def get_deskew_params(level):
         'deskew': level,
         'auto_dewarp': level >= 2,
     }
+
+
+def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
+    return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
@@ -97,6 +102,18 @@ def _preprocess_for_decode(img):
     return img
 
 
+def _get_decoder_stream(outfile, ecc, fountain):
+    # set up the outstream: image -> reedsolomon -> fountain -> zstd_decompress -> raw bytes
+    f = open(outfile, 'wb')
+    if fountain:
+        import zstandard as zstd
+        from cimbar.fountain.fountain_decoder_stream import fountain_decoder_stream
+        decompressor = zstd.ZstdDecompressor().stream_writer(f)
+        f = fountain_decoder_stream(decompressor, _fountain_chunk_size(ecc))
+    on_rss_failure = b'' if fountain else None
+    return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
+
+
 def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
     should_preprocess = force_preprocess
     tempdir = None
@@ -124,16 +141,17 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
             pass
 
 
-def decode(src_image, outfile, dark=False, ecc=ECC, force_preprocess=False, deskew=True, auto_dewarp=True):
+def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
-
-    rss = reed_solomon_stream(outfile, ecc, mode='write') if ecc else open(outfile, 'wb')
-    with rss as outstream, interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write') as iw:
-        decoding = {i: bits for i, bits in decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp)}
-        for i, bits in sorted(decoding.items()):
-            block = interleave_lookup[i] // block_size
-            iw.write(bits, block)
+    dstream = _get_decoder_stream(outfile, ecc, fountain)
+    with dstream as outstream:
+        for imgf in src_images:
+            with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
+                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, deskew, auto_dewarp)}
+                for i, bits in sorted(decoding.items()):
+                    block = interleave_lookup[i] // block_size
+                    iw.write(bits, block)
 
 
 def _get_image_template(width, dark):
@@ -163,22 +181,56 @@ def _get_image_template(width, dark):
     return img
 
 
-def encode_iter(src_data, ecc):
-    rss = reed_solomon_stream(src_data, ecc) if ecc else open(src_data, 'rb')
-    with rss as instream, bit_file(instream, bits_per_op=BITS_PER_OP) as f:
-        cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-        for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
-            bits = f.read()
-            yield bits, x, y
+def _get_encoder_stream(src, ecc, fountain, compression_level=6):
+    # various checks to set up the instream.
+    # the hierarchy is raw bytes -> zstd -> fountain -> reedsolomon -> image
+    f = open(src, 'rb')
+    if fountain:
+        import zstandard as zstd
+        from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
+        reader = zstd.ZstdCompressor(level=compression_level).stream_reader(f)
+        f = fountain_encoder_stream(reader, _fountain_chunk_size(ecc))
+    estream = reed_solomon_stream(f, ecc) if ecc else f
+
+    read_size = _fountain_chunk_size(ecc) if fountain else 16384
+    read_count = (f.len // read_size) * 2 if fountain else 1
+    params = {
+        'read_size': read_size,
+        'read_count': read_count,
+    }
+    return estream, params
 
 
-def encode(src_data, dst_image, dark=False, ecc=ECC):
-    img = _get_image_template(TOTAL_SIZE, dark)
+def encode_iter(src_data, ecc, fountain):
+    estream, params = _get_encoder_stream(src_data, ecc, fountain)
+    with estream as instream, bit_file(instream, bits_per_op=BITS_PER_OP, **params) as f:
+        frame_num = 0
+        while f.read_count > 0:
+            cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+            for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
+                bits = f.read()
+                yield bits, x, y, frame_num
+            frame_num += 1
+
+
+def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
+    def save_frame(img, frame):
+        if img:
+            name = dst_image if not frame else f'{dst_image}.{frame}.png'
+            img.save(name)
+
+    img = None
+    frame = None
     ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    for bits, x, y in encode_iter(src_data, ecc):
+    for bits, x, y, frame_num in encode_iter(src_data, ecc, fountain):
+        if frame != frame_num:  # save
+            save_frame(img, frame)
+            img = _get_image_template(TOTAL_SIZE, dark)
+            frame = frame_num
+
         encoded = ct.encode(bits)
         img.paste(encoded, (x, y))
-    img.save(dst_image)
+    save_frame(img, frame)
 
 
 def main():
@@ -186,18 +238,19 @@ def main():
 
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
+    fountain = bool(args.get('--fountain'))
 
     if args['--encode']:
         src_data = args['<src_data>'] or args['--src_data']
-        dst_image = args['<dst_image>'] or args['--dst_image']
-        encode(src_data, dst_image, dark, ecc)
+        dst_image = args['<output>'] or args['--output']
+        encode(src_data, dst_image, dark, ecc, fountain)
         return
 
     deskew = get_deskew_params(args.get('--deskew'))
     force_preprocess = args.get('--force-preprocess')
-    src_image = args['<src_image>'] or args['--src_image']
-    dst_data = args['<dst_data>'] or args['--dst_data']
-    decode(src_image, dst_data, dark, ecc, force_preprocess, **deskew)
+    src_images = args['<IMAGES>']
+    dst_data = args['<output>'] or args['--output']
+    decode(src_images, dst_data, dark, ecc, fountain, force_preprocess, **deskew)
 
 
 if __name__ == '__main__':
