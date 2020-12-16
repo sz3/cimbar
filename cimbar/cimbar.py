@@ -11,7 +11,7 @@ Usage:
 
 Examples:
   python -m cimbar --encode myfile.txt cimb-code.png
-  python -m cimbar cimb-code.png myfile.txt
+  python -m cimbar cimb-code.png -o myfile.txt
 
 Options:
   -h --help                        Show this help.
