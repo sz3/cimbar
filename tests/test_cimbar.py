@@ -85,15 +85,15 @@ class CimbarTest(TestCase):
         self.assertTrue(path.getsize(self.encoded_file) > 0)
 
         out_path = self._temp_path('outfile.txt')
-        decode(self.encoded_file, out_path, dark=True, deskew=False)
+        decode([self.encoded_file], out_path, dark=True, deskew=False)
         self.validate_output(out_path)
 
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
-        decode(self.encoded_file, out_no_ecc, dark=True, ecc=0, deskew=False)
+        decode([self.encoded_file], out_no_ecc, dark=True, ecc=0, deskew=False)
         self.validate_grader(out_no_ecc, 1)
 
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
-        decode(self.encoded_file, out_no_ecc, dark=True, ecc=0)
+        decode([self.encoded_file], out_no_ecc, dark=True, ecc=0)
         self.validate_grader(out_no_ecc, 200)
 
     def test_decode_perspective(self):
@@ -101,15 +101,15 @@ class CimbarTest(TestCase):
         _warp1(self.encoded_file, skewed_image)
 
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
-        decode(skewed_image, out_no_ecc, dark=True, ecc=0)
+        decode([skewed_image], out_no_ecc, dark=True, ecc=0)
         self.validate_grader(out_no_ecc, 2000)
 
     def test_decode_perspective_rotate(self):
         skewed_image = self._temp_path('skewed2.jpg')
         _warp2(self.encoded_file, skewed_image)
 
-        out_no_ecc = self._temp_path('outfile_no_ecc.txt')
-        decode(skewed_image, out_no_ecc, dark=True, ecc=0)
+        out_no_ecc = self._temp_path('outfile_no_ecc2.txt')
+        decode([skewed_image], out_no_ecc, dark=True, ecc=0)
         self.validate_grader(out_no_ecc, 4000)
 
     def test_decode_sample(self):
@@ -117,10 +117,10 @@ class CimbarTest(TestCase):
         warped_image = 'samples/6bit/4_30_802.jpg'
 
         clean_bits = self._temp_path('outfile_clean.txt')
-        decode(clean_image, clean_bits, dark=True, ecc=0, auto_dewarp=False)
+        decode([clean_image], clean_bits, dark=True, ecc=0, auto_dewarp=False)
 
         warped_bits = self._temp_path('outfile_warped.txt')
-        decode(warped_image, warped_bits, dark=True, ecc=0, auto_dewarp=False)
+        decode([warped_image], warped_bits, dark=True, ecc=0, auto_dewarp=False)
 
         num_bits = evaluate_grader(clean_bits, warped_bits, BITS_PER_OP, True)
         self.assertLess(num_bits, 350)
