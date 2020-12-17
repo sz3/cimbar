@@ -22,13 +22,18 @@ Cimbar was inspired by [image hashing](https://github.com/JohannesBuchner/imageh
 
 ## But, does it really work?
 
+Yes, and I can prove it. :)
+
+* encoder: https://cimbar.org (uses [libcimbar](https://github.com/sz3/libcimbar))
+* decoder: https://github.com/sz3/cfc/releases/latest
+
 The main constraints cimbar must deal with are:
 * all tiles in the tileset must be sufficient hamming distance away from each other, where *sufficient* is determined by whether the decoder can consistently place blurry or otherwise imperfect tiles in the correct "bucket".
 * all colors in the colorset must be far enough away from each other -- currently as a function of RGB value scaling -- such that color bleeding, reflections, and the like, can be overcome.
 
 In practice, this means that the source image should be around 900x900 resolution or greater, with reasonable color correction handled by the camera -- as you'd find in any modern cell phone.
 
-The python cimbar implementation is a research project. It works, but it is not very performant, and does not handle error cases with much grace. [libcimbar](https://github.com/sz3/libcimbar), the C++ implementation, has been much more heavily optimized and tested. The target goals of the proof-of-concept were:
+This python cimbar implementation is a research project. It works, but it is not very performant, and does not handle error cases with much grace. [libcimbar](https://github.com/sz3/libcimbar), the C++ implementation, has been much more heavily optimized and tested. The target goals of the proof-of-concept were:
 1. achieve data density on the order of _10kb_ per image.
 2. validate a theoretical performance (and if possible, an implemented demonstration) of >= _100kb/s_ data transfer (800 kilobits/second) from a computer screen to a cell phone, using only animated cimbar codes and the cell phone camera.
 
