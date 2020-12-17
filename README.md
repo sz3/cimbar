@@ -25,7 +25,7 @@ Cimbar was inspired by [image hashing](https://github.com/JohannesBuchner/imageh
 Yes, and I can prove it. :)
 
 * encoder: https://cimbar.org (uses [libcimbar](https://github.com/sz3/libcimbar))
-* decoder: https://github.com/sz3/cfc/releases/latest
+* decoder Android app: https://github.com/sz3/cfc/releases/latest
 
 The main constraints cimbar must deal with are:
 * all tiles in the tileset must be sufficient hamming distance away from each other, where *sufficient* is determined by whether the decoder can consistently place blurry or otherwise imperfect tiles in the correct "bucket".
