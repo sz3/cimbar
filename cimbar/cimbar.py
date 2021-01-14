@@ -4,7 +4,7 @@
 
 Usage:
   ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
-                         [--fountain] [--preprocess=<0,1>]
+                         [--fountain] [--preprocess=<0,1>] [--color-correct]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
@@ -23,6 +23,7 @@ Options:
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
+  --color-correct                  Attempt color correction.
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
@@ -115,21 +116,51 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
-def compute_image_tint(img, dark):
-    tint = DEFAULT_COLOR_CORRECT
-    tint['r_max'] = tint['g_max'] = tint['b_max'] = 120
-    for x, y in [(28, 28), (28, 992), (992, 28)]:
-        iblock = img.crop((x, y, x + 4, y + 4))
-        r, g, b = avg_color(iblock)
+def compute_image_tint(img, dark, tint=DEFAULT_COLOR_CORRECT):
+    def update(c, r, g, b):
         m = max(r, g, b)
         adj = 255 - m
-        tint['r_max'] = max(tint['r_max'], r + adj)
-        tint['g_max'] = max(tint['g_max'], g + adj)
-        tint['b_max'] = max(tint['b_max'], b + adj)
+        c['r_max'] = max(c['r_max'], r + adj)
+        c['g_max'] = max(c['g_max'], g + adj)
+        c['b_max'] = max(c['b_max'], b + adj)
+
+    cc = DEFAULT_COLOR_CORRECT
+    cc['r_max'] = cc['g_max'] = cc['b_max'] = 120
+
+    if dark:
+        pos = [(28, 28), (28, 992), (992, 28)]
+    else:
+        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
+
+    for x, y in pos:
+        iblock = img.crop((x, y, x + 4, y + 4))
+        r, g, b = avg_color(iblock)
+        update(cc, *avg_color(iblock))
+    update(tint, tint['r_max'], tint['g_max'], tint['b_max'])
+
+    for c in ['r_max', 'g_max', 'b_max']:
+        tint[c] = min(tint[c], cc[c])
+
+    minmax = min(tint['r_max'], tint['g_max'], tint['b_max'])
+    if minmax == tint['r_max']:
+        tint['b_min'] *= 2
+
+    print('color tint')
+    print(tint)
     return tint
 
 
-def decode_iter(src_image, dark, should_preprocess, deskew, auto_dewarp):
+def _decode_iter(ct, img, color_img):
+    cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
+    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
+    decode_order = FloodDecodeOrder(cell_pos, finder)
+    for i, (x, y), drift in decode_order:
+        best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
+        decode_order.update(best_dx, best_dy, best_distance)
+        yield i, best_bits
+
+
+def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew, auto_dewarp):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -141,17 +172,15 @@ def decode_iter(src_image, dark, should_preprocess, deskew, auto_dewarp):
     else:
         color_img = Image.open(src_image)
 
-    ccorrect = compute_image_tint(color_img, dark)
-    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR, color_correct=ccorrect)
+    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
-    cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
-    decode_order = FloodDecodeOrder(cell_pos, finder)
-    for i, (x, y), drift in decode_order:
-        best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
-        decode_order.update(best_dx, best_dy, best_distance)
-        yield i, best_bits
+    if should_color_correct:
+        for i in _decode_iter(ct, img, color_img):
+            pass
+        ct.color_correct = compute_image_tint(color_img, dark, ct.color_metrics).copy()
+
+    yield from _decode_iter(ct, img, color_img)
 
     if tempdir:  # cleanup
         with tempdir:
@@ -161,14 +190,16 @@ def decode_iter(src_image, dark, should_preprocess, deskew, auto_dewarp):
     print(ct.color_metrics)
 
 
-def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
+def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
+           deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
             with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
-                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, deskew, auto_dewarp)}
+                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,
+                                                               auto_dewarp)}
                 for i, bits in sorted(decoding.items()):
                     block = interleave_lookup[i] // block_size
                     iw.write(bits, block)
@@ -268,9 +299,10 @@ def main():
 
     deskew = get_deskew_params(args.get('--deskew'))
     should_preprocess = int(args.get('--preprocess'))
+    color_correct = args['--color-correct']
     src_images = args['<IMAGES>']
     dst_data = args['<output>'] or args['--output']
-    decode(src_images, dst_data, dark, ecc, fountain, should_preprocess, **deskew)
+    decode(src_images, dst_data, dark, ecc, fountain, should_preprocess, color_correct, **deskew)
 
 
 if __name__ == '__main__':
