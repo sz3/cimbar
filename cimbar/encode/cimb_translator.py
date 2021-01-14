@@ -6,7 +6,7 @@ from PIL import Image
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
-_DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255, 'g_min': 0, 'g_max': 255, 'b_min': 0, 'b_max': 255}
+DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255, 'g_min': 0, 'g_max': 255, 'b_min': 0, 'b_max': 255}
 
 
 def possible_colors(dark, bits=0):
@@ -62,6 +62,13 @@ def load_tile(name, dark, replacements={}):
     return img
 
 
+def avg_color(img):
+    nim = numpy.array(img)
+    w,h,d = nim.shape
+    nim.shape = (w*h, d)
+    return tuple(nim.mean(axis=0))
+
+
 def relative_color(c):
     r, g, b = c
     rg = r - g
@@ -86,12 +93,7 @@ def relative_color_diff(c1, c2):
 # if r_max low, b_min *= 2
 # likewise, if b_max low, r_min *= 2?
 class CimbDecoder:
-    #correct = {'r_min': 0, 'r_max': 192, 'g_min': 0, 'g_max': 255, 'b_min': 63, 'b_max': 255}
-    #correct = {'r_min': 9.4, 'r_max': 192, 'g_min': 19.0, 'g_max': 250.88, 'b_min': 71, 'b_max': 254.2}
-    #correct = {'r_min': 7.72, 'r_max': 231, 'g_min': 9.2, 'g_max': 239.32, 'b_min': 2, 'b_max': 238.68}
-    correct = {'r_min': 1.28, 'r_max': 0xCF, 'g_min': 5.96, 'g_max': 0xEB, 'b_min': 1, 'b_max': 243.32}
-
-    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=_DEFAULT_COLOR_CORRECT):
+    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=DEFAULT_COLOR_CORRECT):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
@@ -201,10 +203,7 @@ class CimbDecoder:
         if len(self.colors) <= 1:
             return 0
 
-        nim = numpy.array(img_cell)
-        w,h,d = nim.shape
-        nim.shape = (w*h, d)
-        r, g, b = tuple(nim.mean(axis=0))
+        r, g, b = avg_color(img_cell)
         bits = self._best_color(r, g, b)
         return bits << self.symbol_bits
 
