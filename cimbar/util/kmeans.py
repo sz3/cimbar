@@ -1,7 +1,7 @@
+import json
+import sys
 
 import pandas as pd
-import numpy as np
-
 
 
 def dist(x, y):
@@ -23,7 +23,7 @@ class kmeans():
         self.df.columns = columns
         self.df.head(n=num_clusters)
 
-        self.centers = self.df.sample(num_clusters)
+        self.centers = self.df.sample(num_clusters)  # random center
         self.labels = self._compute_labels()
 
     def _compute_labels(self):
@@ -32,7 +32,7 @@ class kmeans():
     def update(self):
          self.centers = self.df[self.df.columns].groupby(self.labels).mean()
          print(self.centers)
-         self.labels = self.labels = self._compute_labels()
+         self.labels = self._compute_labels()
 
     def plot(self, filename):
         from matplotlib import pyplot
@@ -47,20 +47,28 @@ class kmeans():
         pyplot.savefig(filename)
 
 
-if __name__ == '__main__':
-
+def _fake_data():
     from sklearn.datasets import make_blobs
-    # create simulated clusters using scikit learn's make_blobs
-    data, _ = make_blobs(n_samples=1000,
-                                    n_features=3,
-                                    centers=4,
-                                    random_state=0,
-                                    cluster_std=0.9)
+    data, _ = make_blobs(n_samples=300,
+                         n_features=3,
+                         centers=4,
+                         random_state=0,
+                         cluster_std=0.9)
+    return data
 
-    k = kmeans(data, ['x', 'y', 'z'], 4)
-    k.plot('/tmp/hi0.png')
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], 'rt') as f:
+            data = json.load(f)
+    else:
+        data = _fake_data()
+    print(data)
+
+    k = kmeans(data, ['r', 'g', 'b'], 4)
+    k.plot('/tmp/colors-start.png')
 
     for i in range(4):
         k.update()
-        k.plot(f'/tmp/hi{i}.png')
+        k.plot(f'/tmp/colors{i}.png')
 
