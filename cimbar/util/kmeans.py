@@ -1,6 +1,7 @@
 import json
 import sys
 
+import numpy
 import pandas as pd
 
 
@@ -22,7 +23,22 @@ class kmeans():
         self.df = pd.DataFrame(data)
         self.df.columns = columns
 
-        self.centers = init_centers or self.df.sample(num_clusters)  # random center
+        if not init_centers:
+            self.centers = self.df.sample(num_clusters)  # random center
+        else:
+            init_centers = [numpy.array(c) for c in init_centers]
+            self.centers = []
+            for r, row in self.df.iterrows():
+                if len(init_centers) == 0:
+                    break
+                for i, ce in enumerate(init_centers):
+                    d = dist(row, ce)
+                    if d < 20000:
+                        self.centers.append(row)
+                        del init_centers[i]
+                        break
+            self.centers = pd.DataFrame(self.centers)
+
         print(self.centers)
         self.labels = self._compute_labels()
 
@@ -66,7 +82,9 @@ if __name__ == '__main__':
         data = _fake_data()
     #print(data)
 
-    k = kmeans(data, ['r', 'g', 'b'], 4)
+    c4 = ([255, 255, 0], [255, 0, 255], [0, 255, 255], [0, 255, 0])
+
+    k = kmeans(data, ['r', 'g', 'b'], 4, c4)
     k.plot('/tmp/colors-start.png')
 
     for i in range(4):
