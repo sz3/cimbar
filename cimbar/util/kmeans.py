@@ -17,13 +17,13 @@ def recompute_cluster_labels(data, centers):
 
 
 class kmeans():
-    def __init__(self, data, columns, num_clusters):
+    def __init__(self, data, columns, num_clusters, init_centers=None):
         self.num_clusters = num_clusters
         self.df = pd.DataFrame(data)
         self.df.columns = columns
-        self.df.head(n=num_clusters)
 
-        self.centers = self.df.sample(num_clusters)  # random center
+        self.centers = init_centers or self.df.sample(num_clusters)  # random center
+        print(self.centers)
         self.labels = self._compute_labels()
 
     def _compute_labels(self):
@@ -38,13 +38,14 @@ class kmeans():
         from matplotlib import pyplot
 
         x, y, z = self.df.columns
-        labels = ['purple','blue','yellow','green'][:self.num_clusters]
 
-        pyplot.scatter(x=x, y=y, c=self.labels, data=self.df)
-        pyplot.scatter(x=x, y=y, data=self.centers, c=labels, marker='*', s=200)
+        fig = pyplot.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(self.df[x], self.df[y], self.df[z], c=self.labels)
+        ax.set_ylim(ax.get_ylim()[::-1])
         pyplot.xlabel(x)
         pyplot.ylabel(y)
-        pyplot.savefig(filename)
+        fig.savefig(filename)
 
 
 def _fake_data():
@@ -63,7 +64,7 @@ if __name__ == '__main__':
             data = json.load(f)
     else:
         data = _fake_data()
-    print(data)
+    #print(data)
 
     k = kmeans(data, ['r', 'g', 'b'], 4)
     k.plot('/tmp/colors-start.png')
