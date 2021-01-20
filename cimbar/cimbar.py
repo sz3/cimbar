@@ -116,6 +116,29 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
+def compute_tint(img, dark):
+    def update(c, r, g, b):
+        m = max(r, g, b)
+        adj = 255 - m
+        c['r'] = max(c['r'], r + adj)
+        c['g'] = max(c['g'], g + adj)
+        c['b'] = max(c['b'], b + adj)
+
+    cc = DEFAULT_COLOR_CORRECT
+    cc['r'] = cc['g'] = cc['b'] = 1
+
+    if dark:
+        pos = [(28, 28), (28, 992), (992, 28)]
+    else:
+        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
+
+    for x, y in pos:
+        iblock = img.crop((x, y, x + 4, y + 4))
+        r, g, b = avg_color(iblock)
+        update(cc, *avg_color(iblock))
+    return cc['r'], cc['g'], cc['b']
+
+
 def compute_image_tint(img, dark, tint=DEFAULT_COLOR_CORRECT):
     def update(c, r, g, b):
         m = max(r, g, b)
@@ -178,7 +201,10 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     if should_color_correct:
         for i in _decode_iter(ct, img, color_img):
             pass
-        ct.color_correct = compute_image_tint(color_img, dark, ct.color_metrics).copy()
+        ct.color_correct = ct.color_metrics.copy()
+        from colormath.chromatic_adaptation import _get_adaptation_matrix
+        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
+                                        numpy.array([255, 255, 255]), 2, 'von_kries')
 
     yield from _decode_iter(ct, img, color_img)
 

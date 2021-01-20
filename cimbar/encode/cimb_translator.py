@@ -69,6 +69,13 @@ def avg_color(img):
     return tuple(nim.mean(axis=0))
 
 
+def simple_color_scale(r, g, b):
+    m = max(r, g, b, 1)
+    scale = 255 / m
+    return r * scale, g * scale, b * scale
+
+
+
 def relative_color(c):
     r, g, b = c
     rg = r - g
@@ -83,22 +90,14 @@ def relative_color_diff(c1, c2):
     return (rel1[0] - rel2[0])**2 + (rel1[1] - rel2[1])**2 + (rel1[2] - rel2[2])**2
 
 
-# check corners for majorly out-of-wack rgb
-# if we fail a decode, we might use it next go around
-# we'll use min(r_max, [corner rgb]) across the board
-# if red's down, we're blueshifted.
-
-# take the numbers verbatim, except:
-# use min(r_max, adj_anchor_r)
-# if r_max low, b_min *= 2
-# likewise, if b_max low, r_min *= 2?
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=DEFAULT_COLOR_CORRECT):
+    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=DEFAULT_COLOR_CORRECT, ccm=None):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
 
         self.color_correct = color_correct
+        self.ccm = ccm
         self.color_metrics = {}
 
         all_colors = possible_colors(dark, color_bits)
@@ -160,9 +159,14 @@ class CimbDecoder:
         return int((c - cmin) * scalar)
 
     def _correct_all_colors(self, r, g, b):
+        if self.ccm is not None:
+            r, g, b = self.ccm.dot(numpy.array([[r], [g], [b]]))
         return self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
 
     def _best_color(self, r, g, b):
+        #tr, tg, tb = r, g, b  # simple_color_scale(r, g, b)
+        #print(f'{[tr, tg, tb]},')
+
         self._save_all_color_metrics(r, g, b)
         r, g, b = self._correct_all_colors(r, g, b)
 
