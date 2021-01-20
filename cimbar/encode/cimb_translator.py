@@ -6,7 +6,7 @@ from PIL import Image
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
-DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255, 'g_min': 0, 'g_max': 255, 'b_min': 0, 'b_max': 255}
+DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0, 'b_min': 0, 'b_max': 255.0}
 
 
 def possible_colors(dark, bits=0):
@@ -156,19 +156,20 @@ class CimbDecoder:
         elif c > cmax:
             return 255
         scalar = 255 / (cmax - cmin)
-        return int((c - cmin) * scalar)
+        return float((c - cmin) * scalar)
 
     def _correct_all_colors(self, r, g, b):
         if self.ccm is not None:
-            r, g, b = self.ccm.dot(numpy.array([[r], [g], [b]]))
+            r, g, b = self.ccm.dot(numpy.array([r, g, b]))
+            return r, g, b
         return self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
 
     def _best_color(self, r, g, b):
+        r, g, b = self._correct_all_colors(r, g, b)
+        self._save_all_color_metrics(r, g, b)
+
         #tr, tg, tb = r, g, b  # simple_color_scale(r, g, b)
         #print(f'{[tr, tg, tb]},')
-
-        self._save_all_color_metrics(r, g, b)
-        r, g, b = self._correct_all_colors(r, g, b)
 
         # probably some scaling will be good.
         if self.dark:

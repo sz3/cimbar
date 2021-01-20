@@ -118,14 +118,12 @@ def _get_decoder_stream(outfile, ecc, fountain):
 
 def compute_tint(img, dark):
     def update(c, r, g, b):
-        m = max(r, g, b)
-        adj = 255 - m
-        c['r'] = max(c['r'], r + adj)
-        c['g'] = max(c['g'], g + adj)
-        c['b'] = max(c['b'], b + adj)
+        c['r'] = min(c['r'], r)
+        c['g'] = min(c['g'], g)
+        c['b'] = min(c['b'], b)
 
-    cc = DEFAULT_COLOR_CORRECT
-    cc['r'] = cc['g'] = cc['b'] = 1
+    cc = {}
+    cc['r'] = cc['g'] = cc['b'] = 255
 
     if dark:
         pos = [(28, 28), (28, 992), (992, 28)]
@@ -136,6 +134,7 @@ def compute_tint(img, dark):
         iblock = img.crop((x, y, x + 4, y + 4))
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
+    print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
 
 
@@ -199,9 +198,10 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
-        for i in _decode_iter(ct, img, color_img):
+        '''for i in _decode_iter(ct, img, color_img):
             pass
         ct.color_correct = ct.color_metrics.copy()
+        print(ct.color_correct)'''
         from colormath.chromatic_adaptation import _get_adaptation_matrix
         ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
