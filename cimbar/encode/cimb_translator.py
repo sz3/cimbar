@@ -159,10 +159,10 @@ class CimbDecoder:
         return float((c - cmin) * scalar)
 
     def _correct_all_colors(self, r, g, b):
+        r, g, b = self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
         if self.ccm is not None:
             r, g, b = self.ccm.dot(numpy.array([r, g, b]))
-            return r, g, b
-        return self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
+        return r, g, b
 
     def _best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
@@ -177,7 +177,7 @@ class CimbDecoder:
             min_val = min(r, g, b, 48)
             if min_val >= max_val:
                 min_val = 0
-            adjust = 255 / (max_val - min_val)
+            adjust = 255.0 / (max_val - min_val)
             r = self._scale_color(r, adjust, min_val)
             g = self._scale_color(g, adjust, min_val)
             b = self._scale_color(b, adjust, min_val)
@@ -187,7 +187,7 @@ class CimbDecoder:
             if max_val - min_val < 20:
                 r = g = b = 0
             else:
-                adjust = 255 / (max_val - min_val)
+                adjust = 255.0 / (max_val - min_val)
                 r = self._scale_color(r, adjust, min_val)
                 g = self._scale_color(g, adjust, min_val)
                 b = self._scale_color(b, adjust, min_val)

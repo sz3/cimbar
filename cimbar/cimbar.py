@@ -116,7 +116,7 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
-def compute_tint(img, dark):
+def compute_tint(img, dark, adjust):
     def update(c, r, g, b):
         c['r'] = min(c['r'], r)
         c['g'] = min(c['g'], g)
@@ -134,42 +134,17 @@ def compute_tint(img, dark):
         iblock = img.crop((x, y, x + 4, y + 4))
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
+
+    cc['r'] = min(255 - adjust[0], cc['r'])
+    cc['g'] = min(255 - adjust[1], cc['g'])
+    cc['b'] = min(255 - adjust[2], cc['b'])
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
 
 
-def compute_image_tint(img, dark, tint=DEFAULT_COLOR_CORRECT):
-    def update(c, r, g, b):
-        m = max(r, g, b)
-        adj = 255 - m
-        c['r_max'] = max(c['r_max'], r + adj)
-        c['g_max'] = max(c['g_max'], g + adj)
-        c['b_max'] = max(c['b_max'], b + adj)
-
-    cc = DEFAULT_COLOR_CORRECT
-    cc['r_max'] = cc['g_max'] = cc['b_max'] = 120
-
-    if dark:
-        pos = [(28, 28), (28, 992), (992, 28)]
-    else:
-        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
-
-    for x, y in pos:
-        iblock = img.crop((x, y, x + 4, y + 4))
-        r, g, b = avg_color(iblock)
-        update(cc, *avg_color(iblock))
-    update(tint, tint['r_max'], tint['g_max'], tint['b_max'])
-
-    for c in ['r_max', 'g_max', 'b_max']:
-        tint[c] = min(tint[c], cc[c])
-
-    minmax = min(tint['r_max'], tint['g_max'], tint['b_max'])
-    if minmax == tint['r_max']:
-        tint['b_min'] *= 2
-
-    print('color tint')
-    print(tint)
-    return tint
+def tint_adjust(cc):
+    max_low = max(cc['r_min'], cc['g_min'], cc['b_min'])
+    return max_low - cc['r_min'], max_low - cc['g_min'], max_low - cc['b_min']
 
 
 def _decode_iter(ct, img, color_img):
@@ -198,12 +173,14 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
-        '''for i in _decode_iter(ct, img, color_img):
+        for i in _decode_iter(ct, img, color_img):
             pass
         ct.color_correct = ct.color_metrics.copy()
-        print(ct.color_correct)'''
+        print(ct.color_correct)
+
+        adj = tint_adjust(ct.color_correct)
         from colormath.chromatic_adaptation import _get_adaptation_matrix
-        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
+        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark, adj)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
 
     yield from _decode_iter(ct, img, color_img)
