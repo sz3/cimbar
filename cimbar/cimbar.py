@@ -122,18 +122,12 @@ def _get_decoder_stream(outfile, ecc, fountain):
 
 def compute_tint(img, dark, adjust):
     def update(c, r, g, b):
-        c['r'] += r
-        c['g'] += g
-        c['b'] += b
-        c['total'] += 1
-
-    def average(c):
-        for col in ['r', 'g', 'b']:
-            c[col] /= c['total']
-        return c
+        c['r'] = min(c['r'], r)
+        c['g'] = min(c['g'], g)
+        c['b'] = min(c['b'], b)
 
     cc = {}
-    cc['r'] = cc['g'] = cc['b'] = cc['total'] = 0
+    cc['r'] = cc['g'] = cc['b'] = 255
 
     if dark:
         pos = [(28, 28), (28, 992), (992, 28)]
@@ -144,26 +138,17 @@ def compute_tint(img, dark, adjust):
         iblock = img.crop((x, y, x + 4, y + 4))
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
-    average(cc)
 
-    cc['r'] = min(cc['r'], 255 - adjust[0])
-    cc['g'] = min(cc['g'], 255 - adjust[1])
-    cc['b'] = min(cc['b'], 255 - adjust[2])
+    cc['r'] = min(255 - adjust[0], cc['r'])
+    cc['g'] = min(255 - adjust[1], cc['g'])
+    cc['b'] = min(255 - adjust[2], cc['b'])
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
 
 
 def tint_adjust(cc):
-    def adj(c, c_min, c_mid, c_max):
-        if c == c_min:
-            return c_max + c_mid
-        elif c == c_max:
-            return 0
-        else:
-            return c_max - c_min
-
-    lows = sorted([cc['r_min'], cc['g_min'], cc['b_min']])
-    return adj(cc['r_min'], *lows), adj(cc['g_min'], *lows), adj(cc['b_min'], *lows)
+    max_low = max(cc['r_min'], cc['g_min'], cc['b_min'])
+    return max_low - cc['r_min'], max_low - cc['g_min'], max_low - cc['b_min']
 
 
 def _decode_iter(ct, img, color_img):
@@ -198,8 +183,6 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
         print(ct.color_correct)
 
         adj = tint_adjust(ct.color_correct)
-        print(f'adj {adj}')
-        #adj = 50, 27.68, 0
         from colormath.chromatic_adaptation import _get_adaptation_matrix
         ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark, adj)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
