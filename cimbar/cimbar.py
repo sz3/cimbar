@@ -37,7 +37,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, DEFAULT_COLOR_CORRECT, avg_color
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -63,6 +63,10 @@ def get_deskew_params(level):
         'deskew': level,
         'auto_dewarp': level >= 2,
     }
+
+
+def bits_per_op():
+    return BITS_PER_SYMBOL + BITS_PER_COLOR
 
 
 def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
@@ -118,12 +122,18 @@ def _get_decoder_stream(outfile, ecc, fountain):
 
 def compute_tint(img, dark, adjust):
     def update(c, r, g, b):
-        c['r'] = min(c['r'], r)
-        c['g'] = min(c['g'], g)
-        c['b'] = min(c['b'], b)
+        c['r'] += r
+        c['g'] += g
+        c['b'] += b
+        c['total'] += 1
+
+    def average(c):
+        for col in ['r', 'g', 'b']:
+            c[col] /= c['total']
+        return c
 
     cc = {}
-    cc['r'] = cc['g'] = cc['b'] = 255
+    cc['r'] = cc['g'] = cc['b'] = cc['total'] = 0
 
     if dark:
         pos = [(28, 28), (28, 992), (992, 28)]
@@ -134,17 +144,26 @@ def compute_tint(img, dark, adjust):
         iblock = img.crop((x, y, x + 4, y + 4))
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
+    average(cc)
 
-    cc['r'] = min(255 - adjust[0], cc['r'])
-    cc['g'] = min(255 - adjust[1], cc['g'])
-    cc['b'] = min(255 - adjust[2], cc['b'])
+    cc['r'] = min(cc['r'], 255 - adjust[0])
+    cc['g'] = min(cc['g'], 255 - adjust[1])
+    cc['b'] = min(cc['b'], 255 - adjust[2])
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
 
 
 def tint_adjust(cc):
-    max_low = max(cc['r_min'], cc['g_min'], cc['b_min'])
-    return max_low - cc['r_min'], max_low - cc['g_min'], max_low - cc['b_min']
+    def adj(c, c_min, c_mid, c_max):
+        if c == c_min:
+            return c_max + c_mid
+        elif c == c_max:
+            return 0
+        else:
+            return c_max - c_min
+
+    lows = sorted([cc['r_min'], cc['g_min'], cc['b_min']])
+    return adj(cc['r_min'], *lows), adj(cc['g_min'], *lows), adj(cc['b_min'], *lows)
 
 
 def _decode_iter(ct, img, color_img):
@@ -179,6 +198,8 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
         print(ct.color_correct)
 
         adj = tint_adjust(ct.color_correct)
+        print(f'adj {adj}')
+        #adj = 50, 27.68, 0
         from colormath.chromatic_adaptation import _get_adaptation_matrix
         ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark, adj)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
@@ -289,6 +310,9 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 
 def main():
     args = docopt(__doc__, version='cimbar 0.0.2')
+
+    global BITS_PER_COLOR
+    BITS_PER_COLOR = int(args.get('--colorbits'))
 
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
