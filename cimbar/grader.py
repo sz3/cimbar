@@ -5,7 +5,7 @@
 Using a clean output (encode -> decode, no camera distortion/blur/etc), we grade, bit-for-bit, the results of messy decode.
 
 Usage:
-  ./grader.py <decoded_baseline> <decoded_messy> [--dark]
+  ./grader.py <decoded_baseline> <decoded_messy> [--dark] [--bits-per-op=<bits>]
   ./grader.py (-h | --help)
 
 Examples:
@@ -15,13 +15,14 @@ Options:
   -h --help                        Show this help.
   --version                        Show version.
   --dark                           Use inverted palette.
+  -b --bits-per-op=<4-7>           How many bits-per-op, symbol+color. [default: 6]
 """
 from collections import defaultdict
 from os.path import getsize
 
 from docopt import docopt
 
-from cimbar.cimbar import BITS_PER_OP, BITS_PER_SYMBOL
+from cimbar.cimbar import BITS_PER_SYMBOL
 from cimbar.util.bit_file import bit_file
 
 
@@ -135,7 +136,8 @@ def main():
     src_file = args['<decoded_baseline>']
     dst_file = args['<decoded_messy>']
     dark = args.get('--dark')
-    evaluate(src_file, dst_file, BITS_PER_OP, dark)
+    bits_per_op = int(args.get('--bits-per-op'))
+    evaluate(src_file, dst_file, bits_per_op, dark)
 
 
 if __name__ == '__main__':

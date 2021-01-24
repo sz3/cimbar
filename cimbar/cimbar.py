@@ -46,7 +46,6 @@ from cimbar.util.interleave import interleave, interleave_reverse, interleaved_w
 TOTAL_SIZE = 1024
 BITS_PER_SYMBOL = 4
 BITS_PER_COLOR = 2
-BITS_PER_OP = BITS_PER_SYMBOL + BITS_PER_COLOR
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
@@ -69,7 +68,7 @@ def bits_per_op():
     return BITS_PER_SYMBOL + BITS_PER_COLOR
 
 
-def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
+def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
     return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
@@ -122,12 +121,12 @@ def _get_decoder_stream(outfile, ecc, fountain):
 
 def compute_tint(img, dark, adjust):
     def update(c, r, g, b):
-        c['r'] = min(c['r'], r)
-        c['g'] = min(c['g'], g)
-        c['b'] = min(c['b'], b)
+        c['r'] = max(c['r'], r)
+        c['g'] = max(c['g'], g)
+        c['b'] = max(c['b'], b)
 
     cc = {}
-    cc['r'] = cc['g'] = cc['b'] = 255
+    cc['r'] = cc['g'] = cc['b'] = 1
 
     if dark:
         pos = [(28, 28), (28, 992), (992, 28)]
@@ -177,12 +176,12 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
-        for i in _decode_iter(ct, img, color_img):
+        '''for i in _decode_iter(ct, img, color_img):
             pass
         ct.color_correct = ct.color_metrics.copy()
-        print(ct.color_correct)
+        print(ct.color_correct)'''
 
-        adj = tint_adjust(ct.color_correct)
+        adj = (0, 0, 0)  #tint_adjust(ct.color_correct)
         from colormath.chromatic_adaptation import _get_adaptation_matrix
         ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark, adj)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
@@ -204,7 +203,7 @@ def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_prepr
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
-            with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
+            with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
                 decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,
                                                                auto_dewarp)}
                 for i, bits in sorted(decoding.items()):
@@ -261,7 +260,7 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
 
 def encode_iter(src_data, ecc, fountain):
     estream, params = _get_encoder_stream(src_data, ecc, fountain)
-    with estream as instream, bit_file(instream, bits_per_op=BITS_PER_OP, **params) as f:
+    with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
             cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
