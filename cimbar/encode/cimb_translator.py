@@ -6,7 +6,6 @@ from PIL import Image
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
-DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255, 'g_min': 0, 'g_max': 255, 'b_min': 0, 'b_max': 255}
 
 
 def possible_colors(dark, bits=0):
@@ -83,23 +82,13 @@ def relative_color_diff(c1, c2):
     return (rel1[0] - rel2[0])**2 + (rel1[1] - rel2[1])**2 + (rel1[2] - rel2[2])**2
 
 
-# check corners for majorly out-of-wack rgb
-# if we fail a decode, we might use it next go around
-# we'll use min(r_max, [corner rgb]) across the board
-# if red's down, we're blueshifted.
-
-# take the numbers verbatim, except:
-# use min(r_max, adj_anchor_r)
-# if r_max low, b_min *= 2
-# likewise, if b_max low, r_min *= 2?
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=DEFAULT_COLOR_CORRECT):
+    def __init__(self, dark, symbol_bits, color_bits=0, ccm=None):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
 
-        self.color_correct = color_correct
-        self.color_metrics = {}
+        self.ccm = ccm
 
         all_colors = possible_colors(dark, color_bits)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
@@ -138,32 +127,12 @@ class CimbDecoder:
             c = 255
         return c
 
-    def _save_color_metric(self, c, cname):
-        cmin = self.color_metrics.get(f'{cname}_min') or 255
-        cmax = self.color_metrics.get(f'{cname}_max') or 0
-        self.color_metrics[f'{cname}_min'] = min(cmin, c)
-        self.color_metrics[f'{cname}_max'] = max(cmax, c)
-
-    def _save_all_color_metrics(self, r, g, b):
-        self._save_color_metric(r, 'r')
-        self._save_color_metric(g, 'g')
-        self._save_color_metric(b, 'b')
-
-    def _correct_single_color(self, c, cname):
-        cmin = self.color_correct[f'{cname}_min']
-        cmax = self.color_correct[f'{cname}_max']
-        if c < cmin:
-            return 0
-        elif c > cmax:
-            return 255
-        scalar = 255 / (cmax - cmin)
-        return int((c - cmin) * scalar)
-
     def _correct_all_colors(self, r, g, b):
-        return self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
+        if self.ccm is not None:
+            r, g, b = self.ccm.dot(numpy.array([r, g, b]))
+        return r, g, b
 
     def _best_color(self, r, g, b):
-        self._save_all_color_metrics(r, g, b)
         r, g, b = self._correct_all_colors(r, g, b)
 
         # probably some scaling will be good.
@@ -172,7 +141,7 @@ class CimbDecoder:
             min_val = min(r, g, b, 48)
             if min_val >= max_val:
                 min_val = 0
-            adjust = 255 / (max_val - min_val)
+            adjust = 255.0 / (max_val - min_val)
             r = self._scale_color(r, adjust, min_val)
             g = self._scale_color(g, adjust, min_val)
             b = self._scale_color(b, adjust, min_val)
@@ -182,7 +151,7 @@ class CimbDecoder:
             if max_val - min_val < 20:
                 r = g = b = 0
             else:
-                adjust = 255 / (max_val - min_val)
+                adjust = 255.0 / (max_val - min_val)
                 r = self._scale_color(r, adjust, min_val)
                 g = self._scale_color(g, adjust, min_val)
                 b = self._scale_color(b, adjust, min_val)
@@ -230,3 +199,4 @@ class CimbEncoder:
 
     def encode(self, bits):
         return self.img[bits]
+

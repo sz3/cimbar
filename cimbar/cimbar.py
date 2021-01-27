@@ -37,7 +37,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, DEFAULT_COLOR_CORRECT, avg_color
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -46,7 +46,6 @@ from cimbar.util.interleave import interleave, interleave_reverse, interleaved_w
 TOTAL_SIZE = 1024
 BITS_PER_SYMBOL = 4
 BITS_PER_COLOR = 2
-BITS_PER_OP = BITS_PER_SYMBOL + BITS_PER_COLOR
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
@@ -65,7 +64,11 @@ def get_deskew_params(level):
     }
 
 
-def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
+def bits_per_op():
+    return BITS_PER_SYMBOL + BITS_PER_COLOR
+
+
+def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
     return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
@@ -116,16 +119,14 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
-def compute_image_tint(img, dark, tint=DEFAULT_COLOR_CORRECT):
+def compute_tint(img, dark):
     def update(c, r, g, b):
-        m = max(r, g, b)
-        adj = 255 - m
-        c['r_max'] = max(c['r_max'], r + adj)
-        c['g_max'] = max(c['g_max'], g + adj)
-        c['b_max'] = max(c['b_max'], b + adj)
+        c['r'] = max(c['r'], r)
+        c['g'] = max(c['g'], g)
+        c['b'] = max(c['b'], b)
 
-    cc = DEFAULT_COLOR_CORRECT
-    cc['r_max'] = cc['g_max'] = cc['b_max'] = 120
+    cc = {}
+    cc['r'] = cc['g'] = cc['b'] = 1
 
     if dark:
         pos = [(28, 28), (28, 992), (992, 28)]
@@ -136,18 +137,9 @@ def compute_image_tint(img, dark, tint=DEFAULT_COLOR_CORRECT):
         iblock = img.crop((x, y, x + 4, y + 4))
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
-    update(tint, tint['r_max'], tint['g_max'], tint['b_max'])
 
-    for c in ['r_max', 'g_max', 'b_max']:
-        tint[c] = min(tint[c], cc[c])
-
-    minmax = min(tint['r_max'], tint['g_max'], tint['b_max'])
-    if minmax == tint['r_max']:
-        tint['b_min'] *= 2
-
-    print('color tint')
-    print(tint)
-    return tint
+    print(f'tint is {cc}')
+    return cc['r'], cc['g'], cc['b']
 
 
 def _decode_iter(ct, img, color_img):
@@ -176,18 +168,15 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
-        for i in _decode_iter(ct, img, color_img):
-            pass
-        ct.color_correct = compute_image_tint(color_img, dark, ct.color_metrics).copy()
+        from colormath.chromatic_adaptation import _get_adaptation_matrix
+        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
+                                        numpy.array([255, 255, 255]), 2, 'von_kries')
 
     yield from _decode_iter(ct, img, color_img)
 
     if tempdir:  # cleanup
         with tempdir:
             pass
-
-    print('decoder avg colors:')
-    print(ct.color_metrics)
 
 
 def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
@@ -197,7 +186,7 @@ def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_prepr
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
-            with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
+            with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
                 decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,
                                                                auto_dewarp)}
                 for i, bits in sorted(decoding.items()):
@@ -254,7 +243,7 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
 
 def encode_iter(src_data, ecc, fountain):
     estream, params = _get_encoder_stream(src_data, ecc, fountain)
-    with estream as instream, bit_file(instream, bits_per_op=BITS_PER_OP, **params) as f:
+    with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
             cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
@@ -287,6 +276,9 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 def main():
     args = docopt(__doc__, version='cimbar 0.0.2')
 
+    global BITS_PER_COLOR
+    BITS_PER_COLOR = int(args.get('--colorbits'))
+
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
     fountain = bool(args.get('--fountain'))
@@ -307,3 +299,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
