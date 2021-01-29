@@ -37,7 +37,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color, possible_colors
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -119,7 +119,7 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
-def compute_tint(img, dark, adjust):
+def compute_tint(img, dark):
     def update(c, r, g, b):
         c['r'] = max(c['r'], r)
         c['g'] = max(c['g'], g)
@@ -138,16 +138,8 @@ def compute_tint(img, dark, adjust):
         r, g, b = avg_color(iblock)
         update(cc, *avg_color(iblock))
 
-    cc['r'] = min(255 - adjust[0], cc['r'])
-    cc['g'] = min(255 - adjust[1], cc['g'])
-    cc['b'] = min(255 - adjust[2], cc['b'])
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
-
-
-def tint_adjust(cc):
-    max_low = max(cc['r_min'], cc['g_min'], cc['b_min'])
-    return max_low - cc['r_min'], max_low - cc['g_min'], max_low - cc['b_min']
 
 
 def _decode_iter(ct, img, color_img):
@@ -176,15 +168,18 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
-        '''for i in _decode_iter(ct, img, color_img):
-            pass
-        ct.color_correct = ct.color_metrics.copy()
-        print(ct.color_correct)'''
-
-        adj = (0, 0, 0)  #tint_adjust(ct.color_correct)
         from colormath.chromatic_adaptation import _get_adaptation_matrix
-        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark, adj)]),
+        ct.ccm = white = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
+        for i in _decode_iter(ct, img, color_img):
+            pass
+        print(ct.color_metrics)
+
+        observed = [c for _, c in ct.color_metrics]
+        exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
+        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+        der = matrix_colour_correction_Cheung2004(observed, exp)
+        ct.ccm = der.dot(white)
 
     yield from _decode_iter(ct, img, color_img)
 

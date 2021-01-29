@@ -75,7 +75,6 @@ def simple_color_scale(r, g, b):
     return r * scale, g * scale, b * scale
 
 
-
 def relative_color(c):
     r, g, b = c
     rg = r - g
@@ -98,10 +97,10 @@ class CimbDecoder:
 
         self.color_correct = color_correct
         self.ccm = ccm
-        self.color_metrics = {}
 
         all_colors = possible_colors(dark, color_bits)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
+        self.color_metrics = [(4000000, None) for c in self.colors.keys()]  # list(distance, color)
 
         for i in range(2 ** symbol_bits):
             name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
@@ -137,36 +136,20 @@ class CimbDecoder:
             c = 255
         return c
 
-    def _save_color_metric(self, c, cname):
-        cmin = self.color_metrics.get(f'{cname}_min') or 255
-        cmax = self.color_metrics.get(f'{cname}_max') or 0
-        self.color_metrics[f'{cname}_min'] = min(cmin, c)
-        self.color_metrics[f'{cname}_max'] = max(cmax, c)
-
-    def _save_all_color_metrics(self, r, g, b):
-        self._save_color_metric(r, 'r')
-        self._save_color_metric(g, 'g')
-        self._save_color_metric(b, 'b')
-
-    def _correct_single_color(self, c, cname):
-        cmin = self.color_correct[f'{cname}_min']
-        cmax = self.color_correct[f'{cname}_max']
-        if c < cmin:
-            return 0
-        elif c > cmax:
-            return 255
-        scalar = 255 / (cmax - cmin)
-        return float((c - cmin) * scalar)
-
     def _correct_all_colors(self, r, g, b):
-        r, g, b = self._correct_single_color(r, 'r'), self._correct_single_color(g, 'g'), self._correct_single_color(b, 'b')
         if self.ccm is not None:
             r, g, b = self.ccm.dot(numpy.array([r, g, b]))
         return r, g, b
 
+    def _update_metrics(self, i, c, color_in):
+        stats = self.color_metrics[i]
+        real_distance = self._check_color(c, color_in)
+        if real_distance < stats[0]:
+            self.color_metrics[i] = (real_distance, color_in)
+
     def _best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
-        self._save_all_color_metrics(r, g, b)
+        color_in = (r, g, b)
 
         #tr, tg, tb = r, g, b  # simple_color_scale(r, g, b)
         #print(f'{[tr, tg, tb]},')
@@ -200,6 +183,8 @@ class CimbDecoder:
             if diff < best_distance:
                 best_fit = i
                 best_distance = diff
+
+                self._update_metrics(i, c, color_in)
                 #if best_distance < 30:
                 #    break
         return best_fit
