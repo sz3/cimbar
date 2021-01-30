@@ -4,7 +4,7 @@
 
 Usage:
   ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
-                         [--fountain] [--preprocess=<0,1>] [--color-correct]
+                         [--fountain] [--preprocess=<0,1>] [--color-correct=<0-2>]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
@@ -23,7 +23,7 @@ Options:
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --color-correct                  Attempt color correction.
+  --color-correct=<0-2>            Color correction. 0 is off. 1 is white balance. 2 is 2-pass least squares. [default: 1]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
@@ -152,7 +152,7 @@ def _decode_iter(ct, img, color_img):
         yield i, best_bits
 
 
-def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew, auto_dewarp):
+def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -167,19 +167,20 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
-    if should_color_correct:
+    if color_correct:
         from colormath.chromatic_adaptation import _get_adaptation_matrix
         ct.ccm = white = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
-        for i in _decode_iter(ct, img, color_img):
-            pass
-        print(ct.color_metrics)
+        if color_correct == 2:
+            for i in _decode_iter(ct, img, color_img):
+                pass
+            print(ct.color_metrics)
 
-        observed = [c for _, c in ct.color_metrics]
-        exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
-        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-        der = matrix_colour_correction_Cheung2004(observed, exp)
-        ct.ccm = der.dot(white)
+            observed = [c for _, c in ct.color_metrics]
+            exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
+            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+            der = matrix_colour_correction_Cheung2004(observed, exp)
+            ct.ccm = der.dot(white)
 
     yield from _decode_iter(ct, img, color_img)
 
@@ -303,7 +304,7 @@ def main():
 
     deskew = get_deskew_params(args.get('--deskew'))
     should_preprocess = int(args.get('--preprocess'))
-    color_correct = args['--color-correct']
+    color_correct = int(args['--color-correct'])
     src_images = args['<IMAGES>']
     dst_data = args['<output>'] or args['--output']
     decode(src_images, dst_data, dark, ecc, fountain, should_preprocess, color_correct, **deskew)

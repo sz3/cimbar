@@ -28,7 +28,7 @@ def possible_colors(dark, bits=0):
             (0xFF, 0, 0xFF),
             (0, 0xFF, 0),
         ]
-    else:  # dark and bits == 3 (>=??)
+    else:  # dark and bits == 3
         colors = [
             (0, 0xFF, 0xFF),  # cyan
             (0x7F, 0x7F, 0xFF),  # mid-blue
@@ -43,7 +43,7 @@ def possible_colors(dark, bits=0):
             (0x7F, 0xFF, 0),  # lime green ... greens tend to look way too similar, and may not be reliable
             (0, 0xFF, 0x7F),  # sea green or something
         ]
-    return colors
+    return colors[:2**bits]
 
 
 def load_tile(name, dark, replacements={}):
