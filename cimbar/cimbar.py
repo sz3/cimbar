@@ -5,8 +5,8 @@
 Usage:
   ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
                          [--fountain] [--preprocess=<0,1>] [--color-correct=<0-2>]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
-                       [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
+  ./cimbar.py --encode (<src-data> | --src-data=<filename>) (<output> | --output=<filename>) [--dark | --light]
+                       [--color-bits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -16,9 +16,9 @@ Examples:
 Options:
   -h --help                        Show this help.
   --version                        Show version.
-  --src_data=<filename>            For encoding. Data to encode.
+  --src-data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
-  -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
+  -c --color-bits=<0-3>             How many colorbits in the image. [default: 2]
   -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
@@ -290,14 +290,14 @@ def main():
     args = docopt(__doc__, version='cimbar 0.0.2')
 
     global BITS_PER_COLOR
-    BITS_PER_COLOR = int(args.get('--colorbits'))
+    BITS_PER_COLOR = int(args.get('--color-bits'))
 
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
     fountain = bool(args.get('--fountain'))
 
     if args['--encode']:
-        src_data = args['<src_data>'] or args['--src_data']
+        src_data = args['<src-data>'] or args['--src-data']
         dst_image = args['<output>'] or args['--output']
         encode(src_data, dst_image, dark, ecc, fountain)
         return
