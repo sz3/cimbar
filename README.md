@@ -4,7 +4,9 @@
 
 cimbar is a proof-of-concept 2D data encoding format -- much like [QR Codes](https://en.wikipedia.org/wiki/QR_code), [JAB codes](https://jabcode.org/), and [Microsoft's HCCB](https://en.wikipedia.org/wiki/High_Capacity_Color_Barcode).
 
-![an example cimbar code](https://github.com/sz3/cimbar-samples/blob/v0.5/6bit/4color_ecc30_fountain_0.png)
+<p align="center">
+<img src="https://github.com/sz3/cimbar-samples/blob/v0.5/6bit/4color_ecc30_fountain_0.png" width="70%" title="an example cimbar code" >
+</p>
 
 ## How it works
 
