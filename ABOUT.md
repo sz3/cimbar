@@ -43,7 +43,7 @@ Not yet. The project is -- at this point -- just a proof-of-concept. It's not cl
 	* would a smaller overall resolution satisfy more use cases?
 
 * how viable is the (very simple) color decoding logic?
-	* notably, no color correction is currently done -- the camera is expected to do the heavy lifting
+	* notably, no extensive color correction is currently done -- the camera is expected to do the heavy lifting
 	* color decoding in cimbar has an inherent limitation in that colors must be constrained away from the background color.
 		* for example, blue (0x0000FF) is a bad fit for dark mode cimbar, since it tends to blend together with black.
 		* when the colors blend into the background color, symbol decoding is negative affected, and error rates explode
