@@ -72,7 +72,7 @@ def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOU
     return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
-def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=True):
+def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
     return deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
 
 
@@ -180,7 +180,7 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
 
 
 def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
-           deskew=True, auto_dewarp=True):
+           deskew=True, auto_dewarp=False):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)

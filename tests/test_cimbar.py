@@ -6,7 +6,7 @@ from unittest import TestCase
 import cv2
 import numpy
 
-from cimbar.cimbar import encode, decode, BITS_PER_OP
+from cimbar.cimbar import encode, decode, bits_per_op
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.grader import evaluate as evaluate_grader
 
@@ -78,7 +78,7 @@ class CimbarTest(TestCase):
         self.assertEqual(contents, self._src_data()[:7500])
 
     def validate_grader(self, out_path, target):
-        num_bits = evaluate_grader(self.decode_clean, out_path, BITS_PER_OP, True)
+        num_bits = evaluate_grader(self.decode_clean, out_path, bits_per_op(), True)
         self.assertLess(num_bits, target)
 
     def test_decode_simple(self):
@@ -101,7 +101,7 @@ class CimbarTest(TestCase):
         _warp1(self.encoded_file, skewed_image)
 
         out_no_ecc = self._temp_path('outfile_no_ecc.txt')
-        decode([skewed_image], out_no_ecc, dark=True, ecc=0)
+        decode([skewed_image], out_no_ecc, dark=True, ecc=0, force_preprocess=True)
         self.validate_grader(out_no_ecc, 2000)
 
     def test_decode_perspective_rotate(self):
@@ -109,7 +109,7 @@ class CimbarTest(TestCase):
         _warp2(self.encoded_file, skewed_image)
 
         out_no_ecc = self._temp_path('outfile_no_ecc2.txt')
-        decode([skewed_image], out_no_ecc, dark=True, ecc=0)
+        decode([skewed_image], out_no_ecc, dark=True, ecc=0, force_preprocess=True)
         self.validate_grader(out_no_ecc, 4000)
 
     def test_decode_sample(self):
@@ -120,7 +120,7 @@ class CimbarTest(TestCase):
         decode([clean_image], clean_bits, dark=True, ecc=0, auto_dewarp=False)
 
         warped_bits = self._temp_path('outfile_warped.txt')
-        decode([warped_image], warped_bits, dark=True, ecc=0, auto_dewarp=False)
+        decode([warped_image], warped_bits, dark=True, ecc=0, force_preprocess=True, auto_dewarp=False)
 
-        num_bits = evaluate_grader(clean_bits, warped_bits, BITS_PER_OP, True)
+        num_bits = evaluate_grader(clean_bits, warped_bits, bits_per_op(), True)
         self.assertLess(num_bits, 350)
