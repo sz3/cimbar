@@ -61,6 +61,13 @@ def load_tile(name, dark, replacements={}):
     return img
 
 
+def avg_color(img):
+    nim = numpy.array(img)
+    w,h,d = nim.shape
+    nim.shape = (w*h, d)
+    return tuple(nim.mean(axis=0))
+
+
 def relative_color(c):
     r, g, b = c
     rg = r - g
@@ -76,10 +83,12 @@ def relative_color_diff(c1, c2):
 
 
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0):
+    def __init__(self, dark, symbol_bits, color_bits=0, ccm=None):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
+
+        self.ccm = ccm
 
         all_colors = possible_colors(dark, color_bits)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
@@ -112,33 +121,40 @@ class CimbDecoder:
         #return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
         return relative_color_diff(c, d)
 
-    def _fix_color(self, c, adjust, down):
+    def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
         if c > (245 - down):
             c = 255
         return c
 
+    def _correct_all_colors(self, r, g, b):
+        if self.ccm is not None:
+            r, g, b = self.ccm.dot(numpy.array([r, g, b]))
+        return r, g, b
+
     def _best_color(self, r, g, b):
+        r, g, b = self._correct_all_colors(r, g, b)
+
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
             min_val = min(r, g, b, 48)
             if min_val >= max_val:
                 min_val = 0
-            adjust = 255 / (max_val - min_val)
-            r = self._fix_color(r, adjust, min_val)
-            g = self._fix_color(g, adjust, min_val)
-            b = self._fix_color(b, adjust, min_val)
+            adjust = 255.0 / (max_val - min_val)
+            r = self._scale_color(r, adjust, min_val)
+            g = self._scale_color(g, adjust, min_val)
+            b = self._scale_color(b, adjust, min_val)
         else:
             min_val = min(r, g, b)
             max_val = max(r, g, b, 1)
             if max_val - min_val < 20:
                 r = g = b = 0
             else:
-                adjust = 255 / (max_val - min_val)
-                r = self._fix_color(r, adjust, min_val)
-                g = self._fix_color(g, adjust, min_val)
-                b = self._fix_color(b, adjust, min_val)
+                adjust = 255.0 / (max_val - min_val)
+                r = self._scale_color(r, adjust, min_val)
+                g = self._scale_color(g, adjust, min_val)
+                b = self._scale_color(b, adjust, min_val)
 
         best_fit = 0
         best_distance = 1000000
@@ -156,10 +172,7 @@ class CimbDecoder:
         if len(self.colors) <= 1:
             return 0
 
-        nim = numpy.array(img_cell)
-        w,h,d = nim.shape
-        nim.shape = (w*h, d)
-        r, g, b = tuple(nim.mean(axis=0))
+        r, g, b = avg_color(img_cell)
         bits = self._best_color(r, g, b)
         return bits << self.symbol_bits
 
@@ -186,3 +199,4 @@ class CimbEncoder:
 
     def encode(self, bits):
         return self.img[bits]
+

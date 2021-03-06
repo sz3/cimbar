@@ -3,10 +3,10 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--deskew=<0-2>] [--ecc=<0-150>] [--fountain]
-                         [--force-preprocess]
+  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
+                         [--fountain] [--preprocess=<0,1>] [--color-correct]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
-                       [--ecc=<0-150>] [--fountain]
+                       [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
 Examples:
@@ -18,12 +18,14 @@ Options:
   --version                        Show version.
   --src_data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
+  -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
   -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
+  --color-correct                  Attempt color correction.
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
-  --force-preprocess               Always run sharpening filters on image before decoding.
+  --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
 from os import path
 from tempfile import TemporaryDirectory
@@ -35,7 +37,7 @@ from PIL import Image
 
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -44,7 +46,6 @@ from cimbar.util.interleave import interleave, interleave_reverse, interleaved_w
 TOTAL_SIZE = 1024
 BITS_PER_SYMBOL = 4
 BITS_PER_COLOR = 2
-BITS_PER_OP = BITS_PER_SYMBOL + BITS_PER_COLOR
 CELL_SIZE = 8
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
@@ -63,7 +64,11 @@ def get_deskew_params(level):
     }
 
 
-def _fountain_chunk_size(ecc=ECC, bits_per_op=BITS_PER_OP, fountain_blocks=FOUNTAIN_BLOCKS):
+def bits_per_op():
+    return BITS_PER_SYMBOL + BITS_PER_COLOR
+
+
+def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
     return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
@@ -114,20 +119,30 @@ def _get_decoder_stream(outfile, ecc, fountain):
     return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
-def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
-    should_preprocess = force_preprocess
-    tempdir = None
-    if deskew:
-        tempdir = TemporaryDirectory()
-        temp_img = path.join(tempdir.name, path.basename(src_image))
-        dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
-        should_preprocess |= dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
-        color_img = Image.open(temp_img)
-    else:
-        color_img = Image.open(src_image)
-    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
-    img = _preprocess_for_decode(color_img) if should_preprocess else color_img
+def compute_tint(img, dark):
+    def update(c, r, g, b):
+        c['r'] = max(c['r'], r)
+        c['g'] = max(c['g'], g)
+        c['b'] = max(c['b'], b)
 
+    cc = {}
+    cc['r'] = cc['g'] = cc['b'] = 1
+
+    if dark:
+        pos = [(28, 28), (28, 992), (992, 28)]
+    else:
+        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
+
+    for x, y in pos:
+        iblock = img.crop((x, y, x + 4, y + 4))
+        r, g, b = avg_color(iblock)
+        update(cc, *avg_color(iblock))
+
+    print(f'tint is {cc}')
+    return cc['r'], cc['g'], cc['b']
+
+
+def _decode_iter(ct, img, color_img):
     cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
     decode_order = FloodDecodeOrder(cell_pos, finder)
@@ -136,19 +151,44 @@ def decode_iter(src_image, dark, force_preprocess, deskew, auto_dewarp):
         decode_order.update(best_dx, best_dy, best_distance)
         yield i, best_bits
 
+
+def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew, auto_dewarp):
+    tempdir = None
+    if deskew:
+        tempdir = TemporaryDirectory()
+        temp_img = path.join(tempdir.name, path.basename(src_image))
+        dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
+        if should_preprocess < 0:
+            should_preprocess = dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
+        color_img = Image.open(temp_img)
+    else:
+        color_img = Image.open(src_image)
+
+    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
+    img = _preprocess_for_decode(color_img) if should_preprocess else color_img
+
+    if should_color_correct:
+        from colormath.chromatic_adaptation import _get_adaptation_matrix
+        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
+                                        numpy.array([255, 255, 255]), 2, 'von_kries')
+
+    yield from _decode_iter(ct, img, color_img)
+
     if tempdir:  # cleanup
         with tempdir:
             pass
 
 
-def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, deskew=True, auto_dewarp=True):
+def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
+           deskew=True, auto_dewarp=True):
     cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
-            with interleaved_writer(f=outstream, bits_per_op=BITS_PER_OP, mode='write', keep_open=True) as iw:
-                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, deskew, auto_dewarp)}
+            with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
+                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,
+                                                               auto_dewarp)}
                 for i, bits in sorted(decoding.items()):
                     block = interleave_lookup[i] // block_size
                     iw.write(bits, block)
@@ -203,7 +243,7 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
 
 def encode_iter(src_data, ecc, fountain):
     estream, params = _get_encoder_stream(src_data, ecc, fountain)
-    with estream as instream, bit_file(instream, bits_per_op=BITS_PER_OP, **params) as f:
+    with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
             cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
@@ -236,6 +276,9 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 def main():
     args = docopt(__doc__, version='cimbar 0.0.2')
 
+    global BITS_PER_COLOR
+    BITS_PER_COLOR = int(args.get('--colorbits'))
+
     dark = args['--dark'] or not args['--light']
     ecc = int(args.get('--ecc'))
     fountain = bool(args.get('--fountain'))
@@ -247,11 +290,13 @@ def main():
         return
 
     deskew = get_deskew_params(args.get('--deskew'))
-    force_preprocess = args.get('--force-preprocess')
+    should_preprocess = int(args.get('--preprocess'))
+    color_correct = args['--color-correct']
     src_images = args['<IMAGES>']
     dst_data = args['<output>'] or args['--output']
-    decode(src_images, dst_data, dark, ecc, fountain, force_preprocess, **deskew)
+    decode(src_images, dst_data, dark, ecc, fountain, should_preprocess, color_correct, **deskew)
 
 
 if __name__ == '__main__':
     main()
+
