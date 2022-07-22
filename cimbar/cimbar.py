@@ -51,7 +51,8 @@ CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 112
 CELLS_OFFSET = 8
 ECC = 30
-INTERLEAVE_BLOCKS = 155
+ECC_BLOCK_SIZE = 155
+INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
 INTERLEAVE_PARTITIONS = 2
 FOUNTAIN_BLOCKS = 10
 
@@ -69,7 +70,7 @@ def bits_per_op():
 
 
 def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
-    return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
+    return int((ECC_BLOCK_SIZE-ecc) * bits_per_op * 10 / fountain_blocks)
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -116,7 +117,7 @@ def _get_decoder_stream(outfile, ecc, fountain):
         decompressor = zstd.ZstdDecompressor().stream_writer(f)
         f = fountain_decoder_stream(decompressor, _fountain_chunk_size(ecc))
     on_rss_failure = b'' if fountain else None
-    return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
+    return reed_solomon_stream(f, ecc, ECC_BLOCK_SIZE, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
 def compute_tint(img, dark):
@@ -230,7 +231,7 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
         from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
         reader = zstd.ZstdCompressor(level=compression_level).stream_reader(f)
         f = fountain_encoder_stream(reader, _fountain_chunk_size(ecc))
-    estream = reed_solomon_stream(f, ecc) if ecc else f
+    estream = reed_solomon_stream(f, ecc, ECC_BLOCK_SIZE) if ecc else f
 
     read_size = _fountain_chunk_size(ecc) if fountain else 16384
     read_count = (f.len // read_size) * 2 if fountain else 1
@@ -274,7 +275,7 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 
 
 def main():
-    args = docopt(__doc__, version='cimbar 0.0.2')
+    args = docopt(__doc__, version='cimbar 0.0.3')
 
     global BITS_PER_COLOR
     BITS_PER_COLOR = int(args.get('--colorbits'))
