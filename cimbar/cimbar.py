@@ -44,12 +44,12 @@ from cimbar.util.interleave import interleave, interleave_reverse, interleaved_w
 
 
 TOTAL_SIZE = 1024
-BITS_PER_SYMBOL = 4
+BITS_PER_SYMBOL = 2
 BITS_PER_COLOR = 2
-CELL_SIZE = 8
+CELL_SIZE = 5
 CELL_SPACING = CELL_SIZE + 1
-CELL_DIMENSIONS = 112
-CELLS_OFFSET = 8
+CELL_DIMENSIONS = 168
+CELLS_OFFSET = 9
 MARKER_SIZE = 54 // CELL_SPACING  # 6 or 9, probably
 ECC = 30
 ECC_BLOCK_SIZE = 155
