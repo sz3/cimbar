@@ -29,7 +29,7 @@ class cell_drift:
         return f'{self.x},{self.y}'
 
 
-def cell_positions(spacing, dimensions, offset=0, marker_size=6):
+def cell_positions(spacing, dimensions, offset, marker_size):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112
@@ -72,7 +72,7 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
 
 
 class AdjacentCellFinder:
-    def __init__(self, cell_pos, dimensions, marker_size=6):
+    def __init__(self, cell_pos, dimensions, marker_size):
         self.cell_pos = cell_pos
         self.edge_offset = marker_size
         self.dimensions = dimensions

@@ -146,7 +146,7 @@ def compute_tint(img, dark):
 
 def _decode_iter(ct, img, color_img):
     cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
-    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
+    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS, MARKER_SIZE)
     decode_order = FloodDecodeOrder(cell_pos, finder)
     for i, (x, y), drift in decode_order:
         best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
