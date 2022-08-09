@@ -19,7 +19,7 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
-  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
+  -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: 40]
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
@@ -43,16 +43,16 @@ from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
 
-TOTAL_SIZE = 1024
+TOTAL_SIZE = 988
 BITS_PER_SYMBOL = 2
 BITS_PER_COLOR = 2
 CELL_SIZE = 5
 CELL_SPACING = CELL_SIZE + 1
-CELL_DIMENSIONS = 168
+CELL_DIMENSIONS = 162
 CELLS_OFFSET = 9
 MARKER_SIZE = 54 // CELL_SPACING  # 6 or 9, probably
-ECC = 30
-ECC_BLOCK_SIZE = 155
+ECC = 40
+ECC_BLOCK_SIZE = 216
 INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
 INTERLEAVE_PARTITIONS = 2
 FOUNTAIN_BLOCKS = 10
@@ -70,8 +70,13 @@ def bits_per_op():
     return BITS_PER_SYMBOL + BITS_PER_COLOR
 
 
+def capacity(bits_per_op=bits_per_op()):
+    total_cells = CELL_DIMENSIONS**2 - (MARKER_SIZE**2 * 4)
+    return total_cells * bits_per_op // 8;
+
+
 def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
-    return int((ECC_BLOCK_SIZE-ecc) * bits_per_op * 10 / fountain_blocks)
+    return capacity(bits_per_op) * (ECC_BLOCK_SIZE-ecc) // ECC_BLOCK_SIZE // fountain_blocks
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -131,9 +136,9 @@ def compute_tint(img, dark):
     cc['r'] = cc['g'] = cc['b'] = 1
 
     if dark:
-        pos = [(28, 28), (28, 992), (992, 28)]
+        pos = [(28, 28), (28, TOTAL_SIZE-32), (TOTAL_SIZE-32, 28)]
     else:
-        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
+        pos = [(67, 0), (0, 67), (TOTAL_SIZE-79, 0), (0, TOTAL_SIZE-79)]
 
     for x, y in pos:
         iblock = img.crop((x, y, x + 4, y + 4))
