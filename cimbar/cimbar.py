@@ -3,7 +3,7 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
+  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-200>]
                          [--fountain] [--preprocess=<0,1>] [--color-correct]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]

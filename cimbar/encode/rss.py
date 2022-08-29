@@ -2,7 +2,7 @@ from reedsolo import RSCodec
 
 
 class reed_solomon_stream:
-    def __init__(self, f, ec=30, block_size=155, mode='read', on_failure=None):
+    def __init__(self, f, ec, block_size, mode='read', on_failure=None):
         if mode not in ['read', 'write']:
             raise Exception('bad bit_file mode. Try "read" or "write"')
         self.mode = mode
