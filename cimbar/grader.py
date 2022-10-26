@@ -15,14 +15,14 @@ Options:
   -h --help                        Show this help.
   --version                        Show version.
   --dark                           Use inverted palette.
-  -b --bits-per-op=<4-7>           How many bits-per-op, symbol+color. [default: 6]
+  -b --bits-per-op=<4-7>           How many bits-per-op, symbol+color.
 """
 from collections import defaultdict
 from os.path import getsize
 
 from docopt import docopt
 
-from cimbar.cimbar import BITS_PER_SYMBOL
+from cimbar.cimbar import bits_per_op as bpo, BITS_PER_SYMBOL
 from cimbar.util.bit_file import bit_file
 
 
@@ -136,7 +136,7 @@ def main():
     src_file = args['<decoded_baseline>']
     dst_file = args['<decoded_messy>']
     dark = args.get('--dark')
-    bits_per_op = int(args.get('--bits-per-op'))
+    bits_per_op = int(args.get('--bits-per-op') or bpo())
     evaluate(src_file, dst_file, bits_per_op, dark)
 
 
