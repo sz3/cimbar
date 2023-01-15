@@ -43,16 +43,16 @@ from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
 
-TOTAL_SIZE = 988
-BITS_PER_SYMBOL = 2
+TOTAL_SIZE = 1024
+BITS_PER_SYMBOL = 3
 BITS_PER_COLOR = 2
-CELL_SIZE = 5
+CELL_SIZE = 6
 CELL_SPACING = CELL_SIZE + 1
-CELL_DIMENSIONS = 162
+CELL_DIMENSIONS = 144
 CELLS_OFFSET = 9
-MARKER_SIZE = 54 // CELL_SPACING  # 6 or 9, probably
-ECC = 40
-ECC_BLOCK_SIZE = 216
+MARKER_SIZE = round(54 / CELL_SPACING)  # 6 or 9, probably
+ECC = 32
+ECC_BLOCK_SIZE = 160
 INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
 INTERLEAVE_PARTITIONS = 2
 FOUNTAIN_BLOCKS = 10
