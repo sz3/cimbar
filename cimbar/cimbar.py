@@ -19,7 +19,7 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
-  -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: 40]
+  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 32]
   -f --fountain                    Use fountain encoding scheme.
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
