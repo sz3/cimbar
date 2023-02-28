@@ -6,6 +6,7 @@ from PIL import Image
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
+WHITE = (255, 255, 255, 255)
 
 
 def possible_colors(dark, bits=0):
@@ -45,10 +46,21 @@ def possible_colors(dark, bits=0):
     return colors
 
 
+def bg_color(color, dark):
+    placeholder = (0, 0, 0, 255) if dark else WHITE
+    bgs = {
+        (0, 0xFF, 0xFF): (0, 0, 0xFF),
+        (0xFF, 0xFF, 0): (0x5F, 0x5F, 0),
+        (0xFF, 0, 0xFF): (0x7F, 0, 0),
+        (0, 0xFF, 0): (0, 0x5F, 0),
+    }
+    return bgs.get(color, placeholder)
+
+
 def load_tile(name, dark, replacements={}):
     img = Image.open(name)
-    if dark:
-        replacements[(255, 255, 255, 255)] = (0, 0, 0, 255)
+    if dark and WHITE not in replacements:
+        replacements[WHITE] = (0, 0, 0, 255)
 
     pixdata = img.load()
     width, height = img.size
@@ -194,7 +206,9 @@ class CimbEncoder:
         # replace by color...
         replacements = {
             (0, 255, 255, 255): color,
+            WHITE: bg_color(color, dark),
         }
+        print(replacements)
         return load_tile(name, dark, replacements)
 
     def encode(self, bits):
