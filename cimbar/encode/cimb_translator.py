@@ -49,10 +49,10 @@ def possible_colors(dark, bits=0):
 def bg_color(color, dark):
     placeholder = (0, 0, 0, 255) if dark else WHITE
     bgs = {
-        (0, 0xFF, 0xFF): (0, 0, 0xFF),
-        (0xFF, 0xFF, 0): (0x5F, 0x5F, 0),
-        (0xFF, 0, 0xFF): (0x7F, 0, 0),
-        (0, 0xFF, 0): (0, 0x5F, 0),
+        (0, 0xFF, 0xFF): (0, 0x30, 0xaa),
+        (0xFF, 0xFF, 0): (0x42, 0x42, 0),
+        (0xFF, 0, 0xFF): (0x7f, 0, 0),
+        (0, 0xFF, 0): (0, 0x4b, 0),
     }
     return bgs.get(color, placeholder)
 
