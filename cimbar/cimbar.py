@@ -49,6 +49,7 @@ BITS_PER_COLOR = 2
 CELL_SIZE = 5
 CELL_SPACING = CELL_SIZE + 1
 CELL_DIMENSIONS = 162
+CELL_DIM_X = 194
 CELLS_OFFSET = 9
 MARKER_SIZE = round(54 / CELL_SPACING)  # 6 or 9, probably
 ECC = 40
@@ -150,7 +151,7 @@ def compute_tint(img, dark):
 
 
 def _decode_iter(ct, img, color_img):
-    cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
+    cell_pos = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
     finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS, MARKER_SIZE)
     decode_order = FloodDecodeOrder(cell_pos, finder)
     for i, (x, y), drift in decode_order:
@@ -188,7 +189,7 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
 
 def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
            deskew=True, auto_dewarp=False):
-    cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
+    cells = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
@@ -253,7 +254,7 @@ def encode_iter(src_data, ecc, fountain):
     with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
-            cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
+            cells = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
             for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
                 bits = f.read()
                 yield bits, x, y, frame_num

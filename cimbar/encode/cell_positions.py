@@ -29,7 +29,7 @@ class cell_drift:
         return f'{self.x},{self.y}'
 
 
-def cell_positions(spacing, dimensions, offset, marker_size):
+def cell_positions(spacing_x, spacing_y, dimensions_x, dimensions_y, offset, marker_size):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112
@@ -42,30 +42,31 @@ def cell_positions(spacing, dimensions, offset, marker_size):
     '''
     #cells = dimensions * dimensions
     offset_y = offset
-    marker_offset_x = spacing * marker_size
-    top_width = dimensions - marker_size - marker_size
+    marker_offset_x = spacing_y * marker_size
+    top_width = dimensions_x - marker_size - marker_size - 4
     top_cells = top_width * marker_size
 
     positions = []
     for i in range(top_cells):
-        x = (i % top_width) * spacing + marker_offset_x + offset
-        y = (i // top_width) * spacing + offset_y
+        x = (i % top_width) * spacing_x + marker_offset_x + offset
+        y = (i // top_width) * spacing_y + offset_y
         positions.append((x, y))
 
-    mid_y = marker_size * spacing
-    mid_width = dimensions
-    mid_cells = mid_width * top_width  # top_width is also "mid_height"
+    mid_y = marker_size * spacing_y
+    mid_width = dimensions_x
+    mid_height = dimensions_y - marker_size - marker_size
+    mid_cells = mid_width * mid_height  # top_width is also "mid_height"
     for i in range(mid_cells):
-        x = (i % mid_width) * spacing + offset
-        y = (i // mid_width) * spacing + mid_y + offset_y
+        x = (i % mid_width) * spacing_x + offset
+        y = (i // mid_width) * spacing_y + mid_y + offset_y
         positions.append((x, y))
 
-    bottom_y = (dimensions - marker_size) * spacing
+    bottom_y = (dimensions_y - marker_size) * spacing_y
     bottom_width = top_width
     bottom_cells = bottom_width * marker_size
     for i in range(bottom_cells):
-        x = (i % bottom_width) * spacing + marker_offset_x + offset
-        y = (i // bottom_width) * spacing + bottom_y + offset_y
+        x = (i % bottom_width) * spacing_x + marker_offset_x + offset
+        y = (i // bottom_width) * spacing_y + bottom_y + offset_y
         positions.append((x, y))
 
     return positions
