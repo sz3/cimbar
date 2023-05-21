@@ -48,10 +48,11 @@ BITS_PER_SYMBOL = 2
 BITS_PER_COLOR = 2
 CELL_SIZE = 5
 CELL_SPACING = CELL_SIZE + 1
-CELL_DIMENSIONS = 162
+CELL_DIM_Y = 162
 CELL_DIM_X = 194
 CELLS_OFFSET = 9
-MARKER_SIZE = round(54 / CELL_SPACING)  # 6 or 9, probably
+MARKER_SIZE_X = round(54 / CELL_SIZE)
+MARKER_SIZE_Y = round(54 / CELL_SPACING)  # 6 or 9, probably
 ECC = 40
 ECC_BLOCK_SIZE = 216
 INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
@@ -71,9 +72,12 @@ def bits_per_op():
     return BITS_PER_SYMBOL + BITS_PER_COLOR
 
 
+def num_cells():
+    return CELL_DIM_Y*CELL_DIM_X - (MARKER_SIZE_X*MARKER_SIZE_Y * 4)
+
+
 def capacity(bits_per_op=bits_per_op()):
-    total_cells = CELL_DIMENSIONS**2 - (MARKER_SIZE**2 * 4)
-    return total_cells * bits_per_op // 8;
+    return num_cells() * bits_per_op // 8;
 
 
 def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
@@ -151,8 +155,8 @@ def compute_tint(img, dark):
 
 
 def _decode_iter(ct, img, color_img):
-    cell_pos = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
-    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS, MARKER_SIZE)
+    cell_pos, num_edge_cells = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIM_Y, CELLS_OFFSET, MARKER_SIZE_X, MARKER_SIZE_Y)
+    finder = AdjacentCellFinder(cell_pos, num_edge_cells, CELL_DIM_X, MARKER_SIZE_X)
     decode_order = FloodDecodeOrder(cell_pos, finder)
     for i, (x, y), drift in decode_order:
         best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
@@ -189,7 +193,7 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
 
 def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
            deskew=True, auto_dewarp=False):
-    cells = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
+    cells, _ = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIM_Y, CELLS_OFFSET, MARKER_SIZE_X, MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
@@ -254,7 +258,8 @@ def encode_iter(src_data, ecc, fountain):
     with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
-            cells = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIMENSIONS, CELLS_OFFSET, MARKER_SIZE)
+            cells, _ = cell_positions(CELL_SIZE, CELL_SPACING, CELL_DIM_X, CELL_DIM_Y, CELLS_OFFSET, MARKER_SIZE_X, MARKER_SIZE_Y)
+            assert len(cells) == num_cells()
             for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
                 bits = f.read()
                 yield bits, x, y, frame_num
