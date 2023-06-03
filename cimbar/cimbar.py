@@ -21,7 +21,7 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
-  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: auto]
+  -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: auto]
   -f --fountain                    Use fountain encoding scheme.
   --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq8x8]
   --dark                           Use dark palette. [default]
@@ -44,7 +44,7 @@ from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, Flo
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
-from cimbar.util.interleave import interleave, interleave_reverse
+from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
 
 BITS_PER_COLOR=conf.BITS_PER_COLOR
