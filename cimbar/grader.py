@@ -22,7 +22,8 @@ from os.path import getsize
 
 from docopt import docopt
 
-from cimbar.cimbar import bits_per_op as bpo, BITS_PER_SYMBOL
+from cimbar.cimbar import bits_per_op as bpo
+from cimbar.conf import BITS_PER_SYMBOL
 from cimbar.util.bit_file import bit_file
 
 

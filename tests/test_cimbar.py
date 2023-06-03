@@ -49,7 +49,7 @@ class CimbarTest(TestCase):
         encode(cls.src_file, cls.encoded_file, dark=True)
 
         cls.decode_clean = path.join(cls.inputs_dir.name, 'decode-no-ecc-clean.txt')
-        with reed_solomon_stream(cls.src_file, 30) as rss, open(cls.decode_clean, 'wb') as f:
+        with reed_solomon_stream(cls.src_file, 30, 155) as rss, open(cls.decode_clean, 'wb') as f:
             f.write(rss.read(7500))
 
     @classmethod
