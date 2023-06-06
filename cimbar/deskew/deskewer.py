@@ -3,6 +3,7 @@ from math import sqrt
 import cv2
 import numpy
 
+from cimbar import conf
 from cimbar.deskew.scanner import CimbarScanner
 
 
@@ -91,9 +92,8 @@ def scan(img, dark, use_edges, size, anchor_size):
     return align
 
 
-def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, anchor_size=30):
-    from cimbar.cimbar import TOTAL_SIZE
-    size = TOTAL_SIZE
+def deskewer(src_image, dst_image, dark, use_edges=True, auto_dewarp=True, anchor_size=ANCHOR_SIZE):
+    size = conf.TOTAL_SIZE
 
     img = cv2.imread(src_image)
     align = scan(img, dark, use_edges, size, anchor_size)

@@ -3,9 +3,11 @@
 """color-icon-matrix barcode
 
 Usage:
-  ./cimbar.py <IMAGES>... --output=<filename> [--dark | --light] [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-150>]
+  ./cimbar.py <IMAGES>... --output=<filename> [--config=<sq8x8,sq5x5,sq5x6>] [--dark | --light]
+                         [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-200>]
                          [--fountain] [--preprocess=<0,1>] [--color-correct]
-  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>) [--dark | --light]
+  ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>)
+                       [--config=<sq8x8,sq5x5,sq5x6>] [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
@@ -19,8 +21,9 @@ Options:
   --src_data=<filename>            For encoding. Data to encode.
   -o --output=<filename>           For encoding. Where to store output. For encodes, this may be interpreted as a prefix.
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
-  -e --ecc=<0-150>                 Reed solomon error correction level. 0 is no ecc. [default: 30]
+  -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: auto]
   -f --fountain                    Use fountain encoding scheme.
+  --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq8x8]
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
   --color-correct                  Attempt color correction.
@@ -35,6 +38,7 @@ import numpy
 from docopt import docopt
 from PIL import Image
 
+from cimbar import conf
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
@@ -43,17 +47,7 @@ from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 
 
-TOTAL_SIZE = 1024
-BITS_PER_SYMBOL = 4
-BITS_PER_COLOR = 2
-CELL_SIZE = 8
-CELL_SPACING = CELL_SIZE + 1
-CELL_DIMENSIONS = 112
-CELLS_OFFSET = 8
-ECC = 30
-INTERLEAVE_BLOCKS = 155
-INTERLEAVE_PARTITIONS = 2
-FOUNTAIN_BLOCKS = 10
+BITS_PER_COLOR=conf.BITS_PER_COLOR
 
 
 def get_deskew_params(level):
@@ -65,11 +59,19 @@ def get_deskew_params(level):
 
 
 def bits_per_op():
-    return BITS_PER_SYMBOL + BITS_PER_COLOR
+    return conf.BITS_PER_SYMBOL + BITS_PER_COLOR
 
 
-def _fountain_chunk_size(ecc=ECC, bits_per_op=bits_per_op(), fountain_blocks=FOUNTAIN_BLOCKS):
-    return int((155-ecc) * bits_per_op * 10 / fountain_blocks)
+def num_cells():
+    return conf.CELL_DIM_Y*conf.CELL_DIM_X - (conf.MARKER_SIZE_X*conf.MARKER_SIZE_Y * 4)
+
+
+def capacity(bits_per_op=bits_per_op()):
+    return num_cells() * bits_per_op // 8;
+
+
+def _fountain_chunk_size(ecc=conf.ECC, bits_per_op=bits_per_op(), fountain_blocks=conf.FOUNTAIN_BLOCKS):
+    return capacity(bits_per_op) * (conf.ECC_BLOCK_SIZE-ecc) // conf.ECC_BLOCK_SIZE // fountain_blocks
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -81,7 +83,7 @@ def _decode_cell(ct, img, color_img, x, y, drift):
     for dx, dy in drift.pairs:
         testX = x + drift.x + dx
         testY = y + drift.y + dy
-        img_cell = img.crop((testX, testY, testX + CELL_SIZE, testY + CELL_SIZE))
+        img_cell = img.crop((testX, testY, testX + conf.CELL_SIZE, testY + conf.CELL_SIZE))
         bits, min_distance = ct.decode_symbol(img_cell)
         best_distance = min(min_distance, best_distance)
         if min_distance == best_distance:
@@ -93,7 +95,7 @@ def _decode_cell(ct, img, color_img, x, y, drift):
 
     testX = x + drift.x + best_dx
     testY = y + drift.y + best_dy
-    best_cell = color_img.crop((testX+1, testY+1, testX + CELL_SIZE-2, testY + CELL_SIZE-2))
+    best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-2, testY + conf.CELL_SIZE-2))
     return best_bits + ct.decode_color(best_cell), best_dx, best_dy, best_distance
 
 
@@ -116,7 +118,7 @@ def _get_decoder_stream(outfile, ecc, fountain):
         decompressor = zstd.ZstdDecompressor().stream_writer(f)
         f = fountain_decoder_stream(decompressor, _fountain_chunk_size(ecc))
     on_rss_failure = b'' if fountain else None
-    return reed_solomon_stream(f, ecc, mode='write', on_failure=on_rss_failure) if ecc else f
+    return reed_solomon_stream(f, ecc, conf.ECC_BLOCK_SIZE, mode='write', on_failure=on_rss_failure) if ecc else f
 
 
 def compute_tint(img, dark):
@@ -129,9 +131,9 @@ def compute_tint(img, dark):
     cc['r'] = cc['g'] = cc['b'] = 1
 
     if dark:
-        pos = [(28, 28), (28, 992), (992, 28)]
+        pos = [(28, 28), (28, conf.TOTAL_SIZE-32), (conf.TOTAL_SIZE-32, 28)]
     else:
-        pos = [(67, 0), (0, 67), (945, 0), (0, 945)]
+        pos = [(67, 0), (0, 67), (conf.TOTAL_SIZE-79, 0), (0, conf.TOTAL_SIZE-79)]
 
     for x, y in pos:
         iblock = img.crop((x, y, x + 4, y + 4))
@@ -143,8 +145,9 @@ def compute_tint(img, dark):
 
 
 def _decode_iter(ct, img, color_img):
-    cell_pos = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-    finder = AdjacentCellFinder(cell_pos, CELL_DIMENSIONS)
+    cell_pos, num_edge_cells = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X,
+                                              conf.CELL_DIM_Y, conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
+    finder = AdjacentCellFinder(cell_pos, num_edge_cells, conf.CELL_DIM_X, conf.MARKER_SIZE_X)
     decode_order = FloodDecodeOrder(cell_pos, finder)
     for i, (x, y), drift in decode_order:
         best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
@@ -159,12 +162,12 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
         temp_img = path.join(tempdir.name, path.basename(src_image))
         dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
         if should_preprocess < 0:
-            should_preprocess = dims[0] < TOTAL_SIZE or dims[1] < TOTAL_SIZE
+            should_preprocess = dims[0] < conf.TOTAL_SIZE or dims[1] < conf.TOTAL_SIZE
         color_img = Image.open(temp_img)
     else:
         color_img = Image.open(src_image)
 
-    ct = CimbDecoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
+    ct = CimbDecoder(dark, symbol_bits=conf.BITS_PER_SYMBOL, color_bits=conf.BITS_PER_COLOR)
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if should_color_correct:
@@ -179,10 +182,11 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
             pass
 
 
-def decode(src_images, outfile, dark=False, ecc=ECC, fountain=False, force_preprocess=False, color_correct=False,
+def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_preprocess=False, color_correct=False,
            deskew=True, auto_dewarp=False):
-    cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-    interleave_lookup, block_size = interleave_reverse(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS)
+    cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
+                              conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
+    interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
@@ -230,7 +234,7 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
         from cimbar.fountain.fountain_encoder_stream import fountain_encoder_stream
         reader = zstd.ZstdCompressor(level=compression_level).stream_reader(f)
         f = fountain_encoder_stream(reader, _fountain_chunk_size(ecc))
-    estream = reed_solomon_stream(f, ecc) if ecc else f
+    estream = reed_solomon_stream(f, ecc, conf.ECC_BLOCK_SIZE) if ecc else f
 
     read_size = _fountain_chunk_size(ecc) if fountain else 16384
     read_count = (f.len // read_size) * 2 if fountain else 1
@@ -246,14 +250,16 @@ def encode_iter(src_data, ecc, fountain):
     with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
-            cells = cell_positions(CELL_SPACING, CELL_DIMENSIONS, CELLS_OFFSET)
-            for x, y in interleave(cells, INTERLEAVE_BLOCKS, INTERLEAVE_PARTITIONS):
+            cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
+                                      conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
+            assert len(cells) == num_cells()
+            for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
                 bits = f.read()
                 yield bits, x, y, frame_num
             frame_num += 1
 
 
-def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
+def encode(src_data, dst_image, dark=False, ecc=conf.ECC, fountain=False):
     def save_frame(img, frame):
         if img:
             name = dst_image if not frame else f'{dst_image}.{frame}.png'
@@ -261,11 +267,11 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 
     img = None
     frame = None
-    ct = CimbEncoder(dark, symbol_bits=BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
+    ct = CimbEncoder(dark, symbol_bits=conf.BITS_PER_SYMBOL, color_bits=BITS_PER_COLOR)
     for bits, x, y, frame_num in encode_iter(src_data, ecc, fountain):
         if frame != frame_num:  # save
             save_frame(img, frame)
-            img = _get_image_template(TOTAL_SIZE, dark)
+            img = _get_image_template(conf.TOTAL_SIZE, dark)
             frame = frame_num
 
         encoded = ct.encode(bits)
@@ -274,13 +280,20 @@ def encode(src_data, dst_image, dark=False, ecc=ECC, fountain=False):
 
 
 def main():
-    args = docopt(__doc__, version='cimbar 0.0.2')
+    args = docopt(__doc__, version='cimbar 0.5.13')
 
     global BITS_PER_COLOR
     BITS_PER_COLOR = int(args.get('--colorbits'))
 
+    config = args['--config']
+    if config:
+        config = conf.known[config]
+        conf.init(config)
     dark = args['--dark'] or not args['--light']
-    ecc = int(args.get('--ecc'))
+    try:
+        ecc = int(args.get('--ecc'))
+    except:
+        ecc = conf.ECC
     fountain = bool(args.get('--fountain'))
 
     if args['--encode']:

@@ -29,7 +29,7 @@ class cell_drift:
         return f'{self.x},{self.y}'
 
 
-def cell_positions(spacing, dimensions, offset=0, marker_size=6):
+def cell_positions(spacing_x, spacing_y, dimensions_x, dimensions_y, offset, marker_size_x, marker_size_y):
     '''
     ex: if dimensions == 128, and marker_size == 8:
     8 tiles at top is 128-16 == 112
@@ -42,46 +42,44 @@ def cell_positions(spacing, dimensions, offset=0, marker_size=6):
     '''
     #cells = dimensions * dimensions
     offset_y = offset
-    marker_offset_x = spacing * marker_size
-    top_width = dimensions - marker_size - marker_size
-    top_cells = top_width * marker_size
+    marker_offset_x = spacing_x * marker_size_x
+    top_width = dimensions_x - marker_size_x - marker_size_x
+    top_cells = top_width * marker_size_y
 
     positions = []
     for i in range(top_cells):
-        x = (i % top_width) * spacing + marker_offset_x + offset
-        y = (i // top_width) * spacing + offset_y
+        x = (i % top_width) * spacing_x + marker_offset_x + offset
+        y = (i // top_width) * spacing_y + offset_y
         positions.append((x, y))
 
-    mid_y = marker_size * spacing
-    mid_width = dimensions
-    mid_cells = mid_width * top_width  # top_width is also "mid_height"
+    mid_y = marker_size_y * spacing_y
+    mid_width = dimensions_x
+    mid_height = dimensions_y - marker_size_y - marker_size_y
+    mid_cells = mid_width * mid_height
     for i in range(mid_cells):
-        x = (i % mid_width) * spacing + offset
-        y = (i // mid_width) * spacing + mid_y + offset_y
+        x = (i % mid_width) * spacing_x + offset
+        y = (i // mid_width) * spacing_y + mid_y + offset_y
         positions.append((x, y))
 
-    bottom_y = (dimensions - marker_size) * spacing
+    bottom_y = (dimensions_y - marker_size_y) * spacing_y
     bottom_width = top_width
-    bottom_cells = bottom_width * marker_size
+    bottom_cells = bottom_width * marker_size_y
     for i in range(bottom_cells):
-        x = (i % bottom_width) * spacing + marker_offset_x + offset
-        y = (i // bottom_width) * spacing + bottom_y + offset_y
+        x = (i % bottom_width) * spacing_x + marker_offset_x + offset
+        y = (i // bottom_width) * spacing_y + bottom_y + offset_y
         positions.append((x, y))
 
-    return positions
+    return positions, top_cells
 
 
 class AdjacentCellFinder:
-    def __init__(self, cell_pos, dimensions, marker_size=6):
+    def __init__(self, cell_pos, num_edge_cells, x_dimensions, x_marker_size):
         self.cell_pos = cell_pos
-        self.edge_offset = marker_size
-        self.dimensions = dimensions
+        self.x_marker_size = x_marker_size
+        self.x_dimensions = x_dimensions
 
-        mid_dimensions = dimensions - marker_size - marker_size
-        mid_cells = dimensions * mid_dimensions
-        edge_cells = mid_dimensions * marker_size
-        self.first_mid = edge_cells
-        self.first_bottom = edge_cells + mid_cells
+        self.first_mid = num_edge_cells
+        self.first_bottom = len(cell_pos) - num_edge_cells
 
     def _section(self, index):
         if index < self.first_mid:
@@ -113,12 +111,12 @@ class AdjacentCellFinder:
 
     def _bottom(self, index):
         # adjust for empty cells due to the marker margin
-        increment = self.dimensions
+        increment = self.x_dimensions
         if self._section(index) in [0, 2]:
-            increment -= self.edge_offset
+            increment -= self.x_marker_size
         b = index + increment
         if self._section(b) in [0, 2]:
-            b -= self.edge_offset
+            b -= self.x_marker_size
 
         if b >= len(self.cell_pos):
             return None
@@ -128,12 +126,12 @@ class AdjacentCellFinder:
 
     def _top(self, index):
         # adjust for empty cells due to the marker margin
-        decrement = self.dimensions
+        decrement = self.x_dimensions
         if self._section(index) in [0, 2]:
-            decrement -= self.edge_offset
+            decrement -= self.x_marker_size
         t = index - decrement
         if self._section(t) in [0, 2]:
-            t += self.edge_offset
+            t += self.x_marker_size
 
         if t < 0:
             return None
@@ -193,7 +191,7 @@ class FloodDecodeOrder:
         self.last = 0
         # seed corners
         last_index = len(self.positions)-1
-        small_row_len = self.cell_finder.dimensions - self.cell_finder.edge_offset - self.cell_finder.edge_offset - 1
+        small_row_len = self.cell_finder.x_dimensions - self.cell_finder.x_marker_size - self.cell_finder.x_marker_size - 1
         heappush(self.heap, CellDecodeInstructions(0, cell_drift(), 0))
         heappush(self.heap, CellDecodeInstructions(small_row_len, cell_drift(), 0))
         heappush(self.heap, CellDecodeInstructions(last_index, cell_drift(), 0))

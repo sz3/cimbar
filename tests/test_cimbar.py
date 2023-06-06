@@ -49,7 +49,7 @@ class CimbarTest(TestCase):
         encode(cls.src_file, cls.encoded_file, dark=True)
 
         cls.decode_clean = path.join(cls.inputs_dir.name, 'decode-no-ecc-clean.txt')
-        with reed_solomon_stream(cls.src_file, 30) as rss, open(cls.decode_clean, 'wb') as f:
+        with reed_solomon_stream(cls.src_file, 30, 155) as rss, open(cls.decode_clean, 'wb') as f:
             f.write(rss.read(7500))
 
     @classmethod
@@ -124,3 +124,31 @@ class CimbarTest(TestCase):
 
         num_bits = evaluate_grader(clean_bits, warped_bits, bits_per_op(), True)
         self.assertLess(num_bits, 350)
+
+
+class RoundtripTest(TestCase):
+    def setUp(self):
+        self.temp_dir = TemporaryDirectory()
+
+        self.src_file = path.join(self.temp_dir.name, 'infile.txt')
+        random_data = bytearray(random.getrandbits(8) for _ in range(4000))
+        src_data = random_data * 4
+        with open(self.src_file, 'wb') as f:
+            f.write(src_data)
+
+    def tearDown(self):
+        with self.temp_dir:
+            pass
+
+    def test_roundtrip(self):
+        dst_image = path.join(self.temp_dir.name, 'encode.png')
+        encode(self.src_file, dst_image, dark=True, fountain=True)
+
+        out_path = path.join(self.temp_dir.name, 'out.txt')
+        decode([dst_image], out_path, dark=True, deskew=False, auto_dewarp=False, fountain=True)
+
+        with open(out_path, 'rb') as f:
+            contents = f.read()
+        with open(self.src_file, 'rb') as f:
+            expected = f.read()
+        self.assertEquals(contents, expected)

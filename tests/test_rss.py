@@ -17,7 +17,7 @@ class ReedSolomonStreamTest(TestCase):
 
         inbuff = BytesIO(s*2)
         outbuff = BytesIO()
-        with reed_solomon_stream(inbuff) as reed_read, reed_solomon_stream(outbuff, mode='write') as reed_write:
+        with reed_solomon_stream(inbuff, 30, 155) as reed_read, reed_solomon_stream(outbuff, 30, 155, mode='write') as reed_write:
             b = reed_read.read(125)
             self.assertEqual(s + expected_rs_code, b)
             reed_write.write(b)
