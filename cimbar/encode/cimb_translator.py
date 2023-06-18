@@ -6,6 +6,7 @@ from PIL import Image
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
+DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0, 'b_min': 0, 'b_max': 255.0}
 
 
 def possible_colors(dark, bits=0):
@@ -42,7 +43,7 @@ def possible_colors(dark, bits=0):
             (0x7F, 0xFF, 0),  # lime green ... greens tend to look way too similar, and may not be reliable
             (0, 0xFF, 0x7F),  # sea green or something
         ]
-    return colors
+    return colors[:2**bits]
 
 
 def load_tile(name, dark, replacements={}):
@@ -68,6 +69,12 @@ def avg_color(img):
     return tuple(nim.mean(axis=0))
 
 
+def simple_color_scale(r, g, b):
+    m = max(r, g, b, 1)
+    scale = 255 / m
+    return r * scale, g * scale, b * scale
+
+
 def relative_color(c):
     r, g, b = c
     rg = r - g
@@ -83,15 +90,17 @@ def relative_color_diff(c1, c2):
 
 
 class CimbDecoder:
-    def __init__(self, dark, symbol_bits, color_bits=0, ccm=None):
+    def __init__(self, dark, symbol_bits, color_bits=0, color_correct=DEFAULT_COLOR_CORRECT, ccm=None):
         self.dark = dark
         self.symbol_bits = symbol_bits
         self.hashes = {}
 
+        self.color_correct = color_correct
         self.ccm = ccm
 
         all_colors = possible_colors(dark, color_bits)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
+        self.color_metrics = [(4000000, None) for c in self.colors.keys()]  # list(distance, color)
 
         for i in range(2 ** symbol_bits):
             name = path.join(CIMBAR_ROOT, 'bitmap', f'{symbol_bits}', f'{i:02x}.png')
@@ -132,8 +141,15 @@ class CimbDecoder:
             r, g, b = self.ccm.dot(numpy.array([r, g, b]))
         return r, g, b
 
+    def _update_metrics(self, i, c, color_in):
+        stats = self.color_metrics[i]
+        real_distance = self._check_color(c, color_in)
+        if real_distance < stats[0]:
+            self.color_metrics[i] = (real_distance, color_in)
+
     def _best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
+        color_in = (r, g, b)
 
         # probably some scaling will be good.
         if self.dark:
@@ -164,6 +180,8 @@ class CimbDecoder:
             if diff < best_distance:
                 best_fit = i
                 best_distance = diff
+
+                self._update_metrics(i, c, color_in)
                 #if best_distance < 30:
                 #    break
         return best_fit
@@ -173,6 +191,7 @@ class CimbDecoder:
             return 0
 
         r, g, b = avg_color(img_cell)
+        # count colors?
         bits = self._best_color(r, g, b)
         return bits << self.symbol_bits
 

@@ -5,7 +5,7 @@
 Usage:
   ./cimbar.py <IMAGES>... --output=<filename> [--config=<sq8x8,sq5x5,sq5x6>] [--dark | --light]
                          [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-200>]
-                         [--fountain] [--preprocess=<0,1>] [--color-correct]
+                         [--fountain] [--preprocess=<0,1>] [--color-correct=<0-2>]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>)
                        [--config=<sq8x8,sq5x5,sq5x6>] [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
@@ -23,10 +23,10 @@ Options:
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
   -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: auto]
   -f --fountain                    Use fountain encoding scheme.
-  --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq8x8]
+  --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq5x5]
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --color-correct                  Attempt color correction.
+  --color-correct=<0-2>            Color correction. 0 is off. 1 is white balance. 2 is 2-pass least squares. [default: 1]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
@@ -41,7 +41,7 @@ from PIL import Image
 from cimbar import conf
 from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
-from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color
+from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color, possible_colors
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
@@ -155,7 +155,7 @@ def _decode_iter(ct, img, color_img):
         yield i, best_bits
 
 
-def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew, auto_dewarp):
+def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -170,10 +170,20 @@ def decode_iter(src_image, dark, should_preprocess, should_color_correct, deskew
     ct = CimbDecoder(dark, symbol_bits=conf.BITS_PER_SYMBOL, color_bits=conf.BITS_PER_COLOR)
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
-    if should_color_correct:
+    if color_correct:
         from colormath.chromatic_adaptation import _get_adaptation_matrix
-        ct.ccm = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
+        ct.ccm = white = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
+        if color_correct == 2:
+            for i in _decode_iter(ct, img, color_img):
+                pass
+            print(ct.color_metrics)
+
+            observed = [c for _, c in ct.color_metrics]
+            exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
+            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+            der = matrix_colour_correction_Cheung2004(observed, exp)
+            ct.ccm = der.dot(white)
 
     yield from _decode_iter(ct, img, color_img)
 
@@ -304,7 +314,7 @@ def main():
 
     deskew = get_deskew_params(args.get('--deskew'))
     should_preprocess = int(args.get('--preprocess'))
-    color_correct = args['--color-correct']
+    color_correct = int(args.get('--color-correct'))
     src_images = args['<IMAGES>']
     dst_data = args['<output>'] or args['--output']
     decode(src_images, dst_data, dark, ecc, fountain, should_preprocess, color_correct, **deskew)
