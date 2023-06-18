@@ -95,7 +95,7 @@ def _decode_cell(ct, img, color_img, x, y, drift):
 
     testX = x + drift.x + best_dx
     testY = y + drift.y + best_dy
-    best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-2, testY + conf.CELL_SIZE-2))
+    best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
     return best_bits + ct.decode_color(best_cell), best_dx, best_dy, best_distance
 
 
