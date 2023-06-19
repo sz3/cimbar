@@ -45,6 +45,7 @@ from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color, p
 from cimbar.encode.rss import reed_solomon_stream
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
+from cimbar.util.clustering import ClusterSituation
 
 
 BITS_PER_COLOR=conf.BITS_PER_COLOR
@@ -137,8 +138,8 @@ def compute_tint(img, dark):
 
     for x, y in pos:
         iblock = img.crop((x, y, x + 4, y + 4))
-        r, g, b = avg_color(iblock)
-        update(cc, *avg_color(iblock))
+        r, g, b = avg_color(iblock, False)
+        update(cc, *avg_color(iblock, False))
 
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
@@ -177,13 +178,16 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
         if color_correct == 2:
             for i in _decode_iter(ct, img, color_img):
                 pass
-            print(ct.color_metrics)
+            clusters = ClusterSituation(ct.color_metrics, 2**BITS_PER_COLOR)
+            clusters.plot('/tmp/foo.png')
+            clusters.index = {i: ct.best_color(*k) for i,k in enumerate(clusters.centers())}
+            ct.color_clusters = clusters
 
-            observed = [c for _, c in ct.color_metrics]
+            '''observed = [c for _, c in ct.color_metrics]
             exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
             from colour.characterisation.correction import matrix_colour_correction_Cheung2004
             der = matrix_colour_correction_Cheung2004(observed, exp)
-            ct.ccm = der.dot(white)
+            ct.ccm = der.dot(white)'''
 
     yield from _decode_iter(ct, img, color_img)
 
