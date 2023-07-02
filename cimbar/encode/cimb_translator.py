@@ -11,20 +11,30 @@ DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0,
 
 
 class AdaptiveMetrics:
-    cutoff_deque = deque([30]*8)
+    max_deque = deque([75]*8)
+    min_deque = deque([75]*8)
 
     @classmethod
-    def update_cutoff(cls, val):
-        cls.cutoff_deque.popleft()
-        cls.cutoff_deque.append(val)
+    def update_cutoffs(cls, vals):
+        maxval = max(vals)
+        cls.max_deque.popleft()
+        cls.max_deque.append(maxval)
+
+        minval = min(vals)
+        cls.min_deque.popleft()
+        cls.min_deque.append(maxval)
 
     @classmethod
-    def cutoff(cls):
-        return min(cls.cutoff_deque)
+    def color_cutoff(cls):
+        return min(cls.max_deque) / 2.5
+
+    @classmethod
+    def low(cls):
+        return min(cls.min_deque)
 
     @classmethod
     def high(cls):
-        return max(cls.cutoff_deque) * 3
+        return max(cls.max_deque)
 
 
 def possible_colors(dark, bits=0):
@@ -90,12 +100,12 @@ def avg_color(img, dark):
     w,h,d = nim.shape
     nim.shape = (w*h, d)
 
-    cutoff = AdaptiveMetrics.cutoff()
+    cutoff = AdaptiveMetrics.color_cutoff()
     if dark:
         nim = numpy.array([(r,g,b) for r,g,b in nim if r > cutoff or g > cutoff])
 
     res = tuple(nim.mean(axis=0))
-    AdaptiveMetrics.update_cutoff(max(res) / 3)
+    AdaptiveMetrics.update_cutoffs(res)
     return res
 
 
@@ -164,8 +174,7 @@ class CimbDecoder:
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
         thresh = AdaptiveMetrics.high()
-        print(f'thresh is {thresh}. Old math would be {245-min(60, down+10)}')
-        if c > thresh:
+        if c > thresh or c > 255:
             c = 255
         return c
 
@@ -187,7 +196,8 @@ class CimbDecoder:
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
-            min_val = min(r, g, b, 48)  #AdaptiveMetrics.cutoff())  # 48
+            print(f'low is {AdaptiveMetrics.low()}')
+            min_val = min(r, g, b, AdaptiveMetrics.low())  # 48
             if min_val >= max_val:
                 min_val = 0
             adjust = 255.0 / (max_val - min_val)
