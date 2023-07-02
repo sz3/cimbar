@@ -158,9 +158,9 @@ def _decode_symbols(ct, img):
 
 
 def _decode_iter(ct, img, color_img):
-    decoding = {i: (bits, cell) for i, bits, cell in _decode_symbols(ct, img)}
+    decoding = {cell: (i, bits) for i, bits, cell in _decode_symbols(ct, img)}
     print('beginning decode colors pass...')
-    for i, (bits, cell) in sorted(decoding.items()):
+    for cell, (i, bits) in sorted(decoding.items(), key=lambda x:(x[0], x[1])):
         testX, testY = cell
         best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
         yield i, bits + ct.decode_color(best_cell)
@@ -215,7 +215,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     with dstream as outstream:
         for imgf in src_images:
             with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
-                for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,auto_dewarp):
+                for i, bits in sorted(decode_iter(imgf, dark, force_preprocess, color_correct, deskew,auto_dewarp)):
                     block = interleave_lookup[i] // block_size
                     iw.write(bits, block)
 
