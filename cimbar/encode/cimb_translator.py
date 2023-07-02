@@ -68,7 +68,7 @@ def avg_color(img, dark):
     nim.shape = (w*h, d)
 
     if dark:
-        nim = numpy.array([(r,g,b) for r,g,b in nim if r > 75 or g > 75 or b > 75])
+        nim = numpy.array([(r,g,b) for r,g,b in nim if r > 75 or g > 75])
 
     return tuple(nim.mean(axis=0))
 
@@ -77,6 +77,20 @@ def simple_color_scale(r, g, b):
     m = max(r, g, b, 1)
     scale = 255 / m
     return r * scale, g * scale, b * scale
+
+
+def relative_color(c):
+    r, g, b = c
+    rg = r - g
+    gb = g - b
+    br = b - r
+    return rg, gb, br
+
+
+def relative_color_diff(c1, c2):
+    rel1 = relative_color(c1)
+    rel2 = relative_color(c2)
+    return (rel1[0] - rel2[0])**2 + (rel1[1] - rel2[1])**2 + (rel1[2] - rel2[2])**2
 
 
 class CimbDecoder:
@@ -118,12 +132,13 @@ class CimbDecoder:
         return self.get_best_fit(cell_hash)  # make this return an object that knows how to get the color bits on demand???
 
     def _check_color(self, c, d):
-        return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
-        #return relative_color_diff(c, d)
+        #return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
+        return relative_color_diff(c, d)
 
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
-        if c > (245 - down):
+        thresh = min(60, down+10)
+        if c > (255 - down):
             c = 255
         return c
 
@@ -140,12 +155,12 @@ class CimbDecoder:
 
     def best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
-
+        print(f'{r} {g} {b}')
 
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
-            min_val = min(r, g, b, 48)
+            min_val = min(r, g, b, max_val-50)
             if min_val >= max_val:
                 min_val = 0
             adjust = 255.0 / (max_val - min_val)
