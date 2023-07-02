@@ -79,7 +79,7 @@ def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
     return deskewer(src_image, temp_image, dark, auto_dewarp=auto_dewarp)
 
 
-def _decode_cell(ct, img, color_img, x, y, drift):
+def _decode_cell(ct, img, x, y, drift):
     best_distance = 1000
     for dx, dy in drift.pairs:
         testX = x + drift.x + dx
@@ -96,8 +96,8 @@ def _decode_cell(ct, img, color_img, x, y, drift):
 
     testX = x + drift.x + best_dx
     testY = y + drift.y + best_dy
-    best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
-    return best_bits + ct.decode_color(best_cell), best_dx, best_dy, best_distance
+    best_cell = (testX, testY)
+    return best_bits, best_cell, best_dx, best_dy, best_distance
 
 
 def _preprocess_for_decode(img):
@@ -145,15 +145,25 @@ def compute_tint(img, dark):
     return cc['r'], cc['g'], cc['b']
 
 
-def _decode_iter(ct, img, color_img):
+def _decode_symbols(ct, img):
     cell_pos, num_edge_cells = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X,
                                               conf.CELL_DIM_Y, conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     finder = AdjacentCellFinder(cell_pos, num_edge_cells, conf.CELL_DIM_X, conf.MARKER_SIZE_X)
     decode_order = FloodDecodeOrder(cell_pos, finder)
+    print('beginning decode symbols pass...')
     for i, (x, y), drift in decode_order:
-        best_bits, best_dx, best_dy, best_distance = _decode_cell(ct, img, color_img, x, y, drift)
+        best_bits, best_cell, best_dx, best_dy, best_distance = _decode_cell(ct, img, x, y, drift)
         decode_order.update(best_dx, best_dy, best_distance)
-        yield i, best_bits
+        yield i, best_bits, best_cell
+
+
+def _decode_iter(ct, img, color_img):
+    decoding = {i: (bits, cell) for i, bits, cell in _decode_symbols(ct, img)}
+    print('beginning decode colors pass...')
+    for i, (bits, cell) in sorted(decoding.items()):
+        testX, testY = cell
+        best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
+        yield i, bits + ct.decode_color(best_cell)
 
 
 def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp):
@@ -176,7 +186,7 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
         ct.ccm = white = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
         if color_correct == 2:
-            for i in _decode_iter(ct, img, color_img):
+            for _ in _decode_iter(ct, img, color_img):
                 pass
             clusters = ClusterSituation(ct.color_metrics, 2**BITS_PER_COLOR)
             clusters.plot('/tmp/foo.png')
@@ -205,9 +215,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     with dstream as outstream:
         for imgf in src_images:
             with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
-                decoding = {i: bits for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,
-                                                               auto_dewarp)}
-                for i, bits in sorted(decoding.items()):
+                for i, bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew,auto_dewarp):
                     block = interleave_lookup[i] // block_size
                     iw.write(bits, block)
 
