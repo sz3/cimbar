@@ -1,3 +1,4 @@
+from collections import deque
 from os import path
 
 import numpy
@@ -7,6 +8,23 @@ from PIL import Image
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..', '..'))
 DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0, 'b_min': 0, 'b_max': 255.0}
+
+
+class AdaptiveMetrics:
+    cutoff_deque = deque([30]*8)
+
+    @classmethod
+    def update_cutoff(cls, val):
+        cls.cutoff_deque.popleft()
+        cls.cutoff_deque.append(val)
+
+    @classmethod
+    def cutoff(cls):
+        return min(cls.cutoff_deque)
+
+    @classmethod
+    def high(cls):
+        return max(cls.cutoff_deque) * 3
 
 
 def possible_colors(dark, bits=0):
@@ -62,15 +80,23 @@ def load_tile(name, dark, replacements={}):
     return img
 
 
+def update_metric(key, val):
+    global _ADAPTIVE_METRICS
+    _ADAPTIVE_METRICS[key] = val
+
+
 def avg_color(img, dark):
     nim = numpy.array(img)
     w,h,d = nim.shape
     nim.shape = (w*h, d)
 
+    cutoff = AdaptiveMetrics.cutoff()
     if dark:
-        nim = numpy.array([(r,g,b) for r,g,b in nim if r > 75 or g > 75])
+        nim = numpy.array([(r,g,b) for r,g,b in nim if r > cutoff or g > cutoff])
 
-    return tuple(nim.mean(axis=0))
+    res = tuple(nim.mean(axis=0))
+    AdaptiveMetrics.update_cutoff(max(res) / 3)
+    return res
 
 
 def simple_color_scale(r, g, b):
@@ -137,8 +163,9 @@ class CimbDecoder:
 
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
-        thresh = min(60, down+10)
-        if c > (255 - down):
+        thresh = AdaptiveMetrics.high()
+        print(f'thresh is {thresh}. Old math would be {245-min(60, down+10)}')
+        if c > thresh:
             c = 255
         return c
 
@@ -160,7 +187,7 @@ class CimbDecoder:
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
-            min_val = min(r, g, b, max_val-50)
+            min_val = min(r, g, b, 48)  #AdaptiveMetrics.cutoff())  # 48
             if min_val >= max_val:
                 min_val = 0
             adjust = 255.0 / (max_val - min_val)
