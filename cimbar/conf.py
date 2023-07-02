@@ -72,7 +72,7 @@ class sq5x6alt:
     CELL_DIM_Y = 157
     CELL_DIM_X = 188
     CELLS_OFFSET = 9
-    ECC = 32
+    ECC = 35
     ECC_BLOCK_SIZE = 182
     INTERLEAVE_PARTITIONS = 2
     FOUNTAIN_BLOCKS = 10
