@@ -11,8 +11,8 @@ DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0,
 
 
 class AdaptiveMetrics:
-    max_deque = deque([75]*8)
-    min_deque = deque([75]*8)
+    max_deque = deque([150]*8)
+    min_deque = deque([150]*8)
 
     @classmethod
     def update_cutoffs(cls, vals):
@@ -26,7 +26,7 @@ class AdaptiveMetrics:
 
     @classmethod
     def color_cutoff(cls):
-        return min(cls.max_deque) / 2.5
+        return min(cls.max_deque) / 2.25
 
     @classmethod
     def low(cls):
@@ -102,7 +102,10 @@ def avg_color(img, dark):
 
     cutoff = AdaptiveMetrics.color_cutoff()
     if dark:
-        nim = numpy.array([(r,g,b) for r,g,b in nim if r > cutoff or g > cutoff])
+        nim = numpy.array([(r,g,b) for r,g,b in nim if r > cutoff or g > cutoff or b > cutoff])
+        if len(nim) <= 3:
+            nim = numpy.array(img)
+            nim.shape = (w*h, d)
 
     res = tuple(nim.mean(axis=0))
     AdaptiveMetrics.update_cutoffs(res)
@@ -174,6 +177,7 @@ class CimbDecoder:
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
         thresh = AdaptiveMetrics.high()
+        #print(f'thresh is {thresh}. Old math would be {245-down}')
         if c > thresh or c > 255:
             c = 255
         return c
