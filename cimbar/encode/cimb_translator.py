@@ -13,16 +13,26 @@ DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0,
 class AdaptiveMetrics:
     max_deque = deque([150]*8)
     min_deque = deque([150]*8)
+    reds = deque([100]*8)
+    greens = deque([100]*8)
+    blues = deque([100]*8)
 
     @classmethod
-    def update_cutoffs(cls, vals):
-        maxval = max(vals)
+    def update_cutoffs(cls, r, g, b):
+        maxval = max(r, g, b)
         cls.max_deque.popleft()
         cls.max_deque.append(maxval)
 
-        minval = min(vals)
+        minval = min(r, g, b)
         cls.min_deque.popleft()
         cls.min_deque.append(maxval)
+
+        cls.reds.popleft()
+        cls.reds.append(r)
+        cls.greens.popleft()
+        cls.greens.append(g)
+        cls.blues.popleft()
+        cls.blues.append(b)
 
     @classmethod
     def color_cutoff(cls):
@@ -35,6 +45,30 @@ class AdaptiveMetrics:
     @classmethod
     def high(cls):
         return max(cls.max_deque)
+
+    @classmethod
+    def low_red(cls):
+        return min(cls.reds)
+
+    @classmethod
+    def high_red(cls):
+        return max(cls.reds)
+
+    @classmethod
+    def low_green(cls):
+        return min(cls.greens)
+
+    @classmethod
+    def high_green(cls):
+        return max(cls.greens)
+
+    @classmethod
+    def low_blue(cls):
+        return min(cls.blues)
+
+    @classmethod
+    def high_blue(cls):
+        return max(cls.blues)
 
 
 def possible_colors(dark, bits=0):
@@ -107,15 +141,22 @@ def avg_color(img, dark):
             nim = numpy.array(img)
             nim.shape = (w*h, d)
 
-    res = tuple(nim.mean(axis=0))
-    AdaptiveMetrics.update_cutoffs(res)
-    return res
+    # save the max value for r,g,b as well
+    # we'll use the min(max) as a proxy for the lowest r,g,b values possible
+
+    return tuple(nim.mean(axis=0))
 
 
 def simple_color_scale(r, g, b):
     m = max(r, g, b, 1)
     scale = 255 / m
     return r * scale, g * scale, b * scale
+
+
+def min_max_scale(min_val, max_val):
+    if min_val >= max_val:
+        min_val = 0
+    return 255.0 / (max_val - min_val)
 
 
 def relative_color(c):
@@ -176,9 +217,7 @@ class CimbDecoder:
 
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
-        thresh = AdaptiveMetrics.high()
-        #print(f'thresh is {thresh}. Old math would be {245-down}')
-        if c > thresh or c > 255:
+        if c > 245:
             c = 255
         return c
 
@@ -195,7 +234,16 @@ class CimbDecoder:
 
     def best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
-        print(f'{r} {g} {b}')
+        metrics = [
+            r, g, b,
+            AdaptiveMetrics.low_red(), AdaptiveMetrics.low_green(), AdaptiveMetrics.low_blue(),
+            AdaptiveMetrics.high_red(), AdaptiveMetrics.high_green(), AdaptiveMetrics.high_blue(),
+            AdaptiveMetrics.low(), AdaptiveMetrics.high()
+        ]
+        metrics = [str(m) for m in metrics]
+        print(','.join(metrics))
+        #print(f'{r} {g} {b}')
+        AdaptiveMetrics.update_cutoffs(r,g,b)
 
         # probably some scaling will be good.
         if self.dark:
