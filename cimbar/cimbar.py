@@ -138,8 +138,8 @@ def compute_tint(img, dark):
 
     for x, y in pos:
         iblock = img.crop((x, y, x + 4, y + 4))
-        r, g, b = avg_color(iblock, False)
-        update(cc, *avg_color(iblock, False))
+        rgb_mean, _ = avg_color(iblock, False)
+        update(cc, *rgb_mean)
 
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
