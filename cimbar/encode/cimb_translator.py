@@ -13,9 +13,12 @@ DEFAULT_COLOR_CORRECT = {'r_min': 0, 'r_max': 255.0, 'g_min': 0, 'g_max': 255.0,
 class AdaptiveMetrics:
     max_deque = deque([150]*8)
     min_deque = deque([150]*8)
-    reds = deque([100]*8)
-    greens = deque([100]*8)
-    blues = deque([100]*8)
+    red_mid = deque([100]*8)
+    green_mid = deque([100]*8)
+    blue_mid = deque([100]*8)
+    red_max = deque([255]*8)
+    green_max = deque([255]*8)
+    blue_max = deque([255]*8)
 
     @classmethod
     def update_cutoffs(cls, r, g, b):
@@ -27,12 +30,21 @@ class AdaptiveMetrics:
         cls.min_deque.popleft()
         cls.min_deque.append(maxval)
 
-        cls.reds.popleft()
-        cls.reds.append(r)
-        cls.greens.popleft()
-        cls.greens.append(g)
-        cls.blues.popleft()
-        cls.blues.append(b)
+        cls.red_mid.popleft()
+        cls.red_mid.append(r)
+        cls.green_mid.popleft()
+        cls.green_mid.append(g)
+        cls.blue_mid.popleft()
+        cls.blue_mid.append(b)
+
+    @classmethod
+    def update_rgb_max(cls, r, g, b):
+        cls.red_max.popleft()
+        cls.red_max.append(r)
+        cls.green_max.popleft()
+        cls.green_max.append(g)
+        cls.blue_max.popleft()
+        cls.blue_max.append(b)
 
     @classmethod
     def color_cutoff(cls):
@@ -48,27 +60,27 @@ class AdaptiveMetrics:
 
     @classmethod
     def low_red(cls):
-        return min(cls.reds)
+        return min(cls.red_mid)
 
     @classmethod
     def high_red(cls):
-        return max(cls.reds)
+        return min(cls.red_max)
 
     @classmethod
     def low_green(cls):
-        return min(cls.greens)
+        return min(cls.green_mid)
 
     @classmethod
     def high_green(cls):
-        return max(cls.greens)
+        return min(cls.green_max)
 
     @classmethod
     def low_blue(cls):
-        return min(cls.blues)
+        return min(cls.blue_mid)
 
     @classmethod
     def high_blue(cls):
-        return max(cls.blues)
+        return min(cls.blue_max)
 
 
 def possible_colors(dark, bits=0):
@@ -143,8 +155,7 @@ def avg_color(img, dark):
 
     # save the max value for r,g,b as well
     # we'll use the min(max) as a proxy for the lowest r,g,b values possible
-
-    return tuple(nim.mean(axis=0))
+    return tuple(nim.mean(axis=0)), tuple(nim.max(axis=0))
 
 
 def simple_color_scale(r, g, b):
@@ -232,18 +243,21 @@ class CimbDecoder:
         if real_distance < stats[0]:
             self.color_metrics[i] = (real_distance, color_in)
 
-    def best_color(self, r, g, b):
+    def best_color(self, rgb_mean, rgb_max):
+        r, g, b = rgb_mean
         r, g, b = self._correct_all_colors(r, g, b)
+        #print(f'{r} {g} {b}')
+
         metrics = [
-            r, g, b,
+            r, g, b, rgb_max[0], rgb_max[1], rgb_max[2],
             AdaptiveMetrics.low_red(), AdaptiveMetrics.low_green(), AdaptiveMetrics.low_blue(),
             AdaptiveMetrics.high_red(), AdaptiveMetrics.high_green(), AdaptiveMetrics.high_blue(),
             AdaptiveMetrics.low(), AdaptiveMetrics.high()
         ]
         metrics = [str(m) for m in metrics]
         print(','.join(metrics))
-        #print(f'{r} {g} {b}')
         AdaptiveMetrics.update_cutoffs(r,g,b)
+        AdaptiveMetrics.update_rgb_max(*rgb_max)
 
         # probably some scaling will be good.
         if self.dark:
@@ -288,9 +302,9 @@ class CimbDecoder:
         if len(self.colors) <= 1:
             return 0
 
-        r, g, b = avg_color(img_cell, self.dark)
+        rgb_mean, rgb_max = avg_color(img_cell, self.dark)
         # count colors?
-        bits = self.best_color(r, g, b)
+        bits = self.best_color(rgb_mean, rgb_max)
         return bits << self.symbol_bits
 
 
