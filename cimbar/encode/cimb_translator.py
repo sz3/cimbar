@@ -22,13 +22,9 @@ class AdaptiveMetrics:
 
     @classmethod
     def update_cutoffs(cls, r, g, b):
-        maxval = max(r, g, b)
-        cls.max_deque.popleft()
-        cls.max_deque.append(maxval)
-
         minval = min(r, g, b)
         cls.min_deque.popleft()
-        cls.min_deque.append(maxval)
+        cls.min_deque.append(minval)
 
         cls.red_mid.popleft()
         cls.red_mid.append(r)
@@ -39,6 +35,10 @@ class AdaptiveMetrics:
 
     @classmethod
     def update_rgb_max(cls, r, g, b):
+        maxval = max(r, g, b)
+        cls.max_deque.popleft()
+        cls.max_deque.append(maxval)
+
         cls.red_max.popleft()
         cls.red_max.append(r)
         cls.green_max.popleft()
@@ -64,7 +64,7 @@ class AdaptiveMetrics:
 
     @classmethod
     def high_red(cls):
-        return min(cls.red_max)
+        return max(cls.red_max)
 
     @classmethod
     def low_green(cls):
@@ -72,7 +72,7 @@ class AdaptiveMetrics:
 
     @classmethod
     def high_green(cls):
-        return min(cls.green_max)
+        return max(cls.green_max)
 
     @classmethod
     def low_blue(cls):
@@ -80,7 +80,7 @@ class AdaptiveMetrics:
 
     @classmethod
     def high_blue(cls):
-        return min(cls.blue_max)
+        return max(cls.blue_max)
 
 
 def possible_colors(dark, bits=0):
@@ -262,7 +262,7 @@ class CimbDecoder:
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
-            print(f'low is {AdaptiveMetrics.low()}')
+            #print(f'low is {AdaptiveMetrics.low()}')
             min_val = min(r, g, b, AdaptiveMetrics.low())  # 48
             if min_val >= max_val:
                 min_val = 0
