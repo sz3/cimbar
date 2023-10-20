@@ -97,10 +97,10 @@ def possible_colors(dark, bits=0):
         ]
     elif dark and bits < 3:
         colors = [
+            (0, 0xFF, 0),
             (0, 0xFF, 0xFF),
             (0xFF, 0xFF, 0),
             (0xFF, 0, 0xFF),
-            (0, 0xFF, 0),
         ]
     else:  # dark and bits == 3 (>=??)
         colors = [
