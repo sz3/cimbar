@@ -23,10 +23,10 @@ def possible_colors(dark, bits=0):
         ]
     elif dark and bits < 3:
         colors = [
+            (0, 0xFF, 0),
             (0, 0xFF, 0xFF),
             (0xFF, 0xFF, 0),
             (0xFF, 0, 0xFF),
-            (0, 0xFF, 0),
         ]
     else:  # dark and bits == 3 (>=??)
         colors = [
@@ -66,10 +66,6 @@ def avg_color(img, dark):
     nim = numpy.array(img)
     w,h,d = nim.shape
     nim.shape = (w*h, d)
-
-    if dark:
-        nim = numpy.array([(r,g,b) for r,g,b in nim if r > 75 or g > 75])
-
     return tuple(nim.mean(axis=0))
 
 
@@ -137,9 +133,10 @@ class CimbDecoder:
 
     def _scale_color(self, c, adjust, down):
         c = int((c - down) * adjust)
-        thresh = min(60, down+10)
-        if c > (255 - down):
+        if c > 245:
             c = 255
+        if c < 0:
+            c = 0
         return c
 
     def _correct_all_colors(self, r, g, b):
@@ -155,12 +152,12 @@ class CimbDecoder:
 
     def best_color(self, r, g, b):
         r, g, b = self._correct_all_colors(r, g, b)
-        print(f'{r} {g} {b}')
+        #print(f'{r} {g} {b}')
 
         # probably some scaling will be good.
         if self.dark:
             max_val = max(r, g, b, 1)
-            min_val = min(r, g, b, max_val-50)
+            min_val = min(r, g, b, max_val-100)
             if min_val >= max_val:
                 min_val = 0
             adjust = 255.0 / (max_val - min_val)
