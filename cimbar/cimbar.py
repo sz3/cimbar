@@ -30,6 +30,7 @@ Options:
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
+from io import BytesIO
 from os import path
 from tempfile import TemporaryDirectory
 
@@ -49,6 +50,7 @@ from cimbar.util.clustering import ClusterSituation
 
 
 BITS_PER_COLOR=conf.BITS_PER_COLOR
+SPLIT_MODE=True
 
 
 def get_deskew_params(level):
@@ -269,7 +271,21 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
 
 def encode_iter(src_data, ecc, fountain):
     estream, params = _get_encoder_stream(src_data, ecc, fountain)
-    with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
+    bits_per = conf.BITS_PER_SYMBOL if SPLIT_MODE else bits_per_op()
+    with estream as instream, bit_file(instream, bits_per_op=bits_per, **params) as f:
+        secondary = None
+        '''
+        if split mode, create secondary stream w/ symbol bytes read directly from instream
+        then create a secondary bit_file(secondary) which we'll read symbol bits from
+        ... reading an additional color_bits from f each iteration
+        '''
+        if SPLIT_MODE:
+            symbols_section_len = capacity(conf.BITS_PER_SYMBOL)
+            secondary = instream.read(symbols_section_len)
+            if len(secondary) < symbols_section_len:
+                secondary += bytes(symbols_section_len - len(secondary))
+            secondary = bit_file(BytesIO(secondary), bits_per_op=BITS_PER_COLOR)
+
         frame_num = 0
         while f.read_count > 0:
             cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
@@ -277,6 +293,8 @@ def encode_iter(src_data, ecc, fountain):
             assert len(cells) == num_cells()
             for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
                 bits = f.read()
+                if secondary:
+                    bits |= secondary.read() << conf.BITS_PER_SYMBOL
                 yield bits, x, y, frame_num
             frame_num += 1
 
