@@ -160,12 +160,19 @@ def _decode_symbols(ct, img):
 
 
 def _decode_iter(ct, img, color_img):
-    decoding = {cell: (i, bits) for i, bits, cell in _decode_symbols(ct, img)}
+    decoding = sorted(_decode_symbols(ct, img))
+    if SPLIT_MODE:
+        for i, bits, _ in decoding:
+            yield i, bits, conf.BITS_PER_SYMBOL
+
     print('beginning decode colors pass...')
-    for cell, (i, bits) in sorted(decoding.items(), key=lambda x:(x[0], x[1])):
+    for i, bits, cell in decoding:
         testX, testY = cell
         best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
-        yield i, bits + ct.decode_color(best_cell)
+        if SPLIT_MODE:
+            yield i, ct.decode_color(best_cell), BITS_PER_COLOR
+        else:
+            yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL), bits_per_op()
 
 
 def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp):
@@ -216,10 +223,27 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
-            with interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True) as iw:
-                for i, bits in sorted(decode_iter(imgf, dark, force_preprocess, color_correct, deskew,auto_dewarp)):
-                    block = interleave_lookup[i] // block_size
-                    iw.write(bits, block)
+            if SPLIT_MODE:
+                writers = [
+                    interleaved_writer(f=outstream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True),
+                    interleaved_writer(f=outstream, bits_per_op=BITS_PER_COLOR, mode='write', keep_open=True)
+                ]
+            else:
+                writers = [
+                    interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True)
+                ]
+            # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
+            current_writer = -1
+            for i, bits, num_bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp):
+                if i == 0:
+                    current_writer += 1
+                block = interleave_lookup[i] // block_size
+                writers[current_writer].write(bits, block)
+
+            # the reordering magic happens when we flush the writers to the underlying outstream
+            for w in writers:
+                with w:  # flush
+                    pass
 
 
 def _get_image_template(width, dark):
@@ -294,7 +318,7 @@ def encode_iter(src_data, ecc, fountain):
             for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
                 bits = f.read()
                 if secondary:
-                    bits |= secondary.read() << conf.BITS_PER_SYMBOL
+                    bits = secondary.read() | (bits << conf.BITS_PER_SYMBOL)
                 yield bits, x, y, frame_num
             frame_num += 1
 

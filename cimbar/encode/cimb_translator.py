@@ -198,8 +198,7 @@ class CimbDecoder:
 
         r, g, b = avg_color(img_cell, self.dark)
         # count colors?
-        bits = self.best_color(r, g, b)
-        return bits << self.symbol_bits
+        return self.best_color(r, g, b)
 
 
 class CimbEncoder:
