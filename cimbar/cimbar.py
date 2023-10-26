@@ -69,11 +69,16 @@ def num_cells():
     return conf.CELL_DIM_Y*conf.CELL_DIM_X - (conf.MARKER_SIZE_X*conf.MARKER_SIZE_Y * 4)
 
 
+def num_fountain_blocks():
+    return bits_per_op() * 2
+
+
 def capacity(bits_per_op=bits_per_op()):
     return num_cells() * bits_per_op // 8;
 
 
 def _fountain_chunk_size(ecc=conf.ECC, bits_per_op=bits_per_op(), fountain_blocks=conf.FOUNTAIN_BLOCKS):
+    fountain_blocks = fountain_blocks or num_fountain_blocks()
     return capacity(bits_per_op) * (conf.ECC_BLOCK_SIZE-ecc) // conf.ECC_BLOCK_SIZE // fountain_blocks
 
 
@@ -121,7 +126,10 @@ def _get_decoder_stream(outfile, ecc, fountain):
         decompressor = zstd.ZstdDecompressor().stream_writer(f)
         f = fountain_decoder_stream(decompressor, _fountain_chunk_size(ecc))
     on_rss_failure = b'' if fountain else None
-    return reed_solomon_stream(f, ecc, conf.ECC_BLOCK_SIZE, mode='write', on_failure=on_rss_failure) if ecc else f
+
+    stream = reed_solomon_stream(f, ecc, conf.ECC_BLOCK_SIZE, mode='write', on_failure=on_rss_failure) if ecc else f
+    fount = f if fountain else None
+    return stream, fount
 
 
 def compute_tint(img, dark):
@@ -227,7 +235,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                               conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
     # potentially could hold on to fountain streaam here?
-    dstream = _get_decoder_stream(outfile, ecc, fountain)
+    dstream, fount = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
             if SPLIT_MODE:
@@ -253,7 +261,9 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                     with iw:
                         pass
                     iw = second_pass
-                    # TODO: update color_index here?
+                    if fount:
+                        print(fount.headers)
+                        # TODO: update color_index here?
                     continue
                 block = interleave_lookup[i] // block_size
                 iw.write(bits, block)

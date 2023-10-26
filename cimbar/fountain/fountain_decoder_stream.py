@@ -11,6 +11,7 @@ class fountain_decoder_stream:
         self.fountain = None
         self.buffer = b''
         self.done = False
+        self.headers = []
 
     @property
     def closed(self):
@@ -42,6 +43,12 @@ class fountain_decoder_stream:
         # split buffer into header,chunk
         # get chunk_id and total_size from header
         hdr = fountain_header(buffer[0:fountain_header.length])
+
+        self.headers.append(hdr)
+        # sanity check/fail if hdr is bad? Will be all 0s if decode failed...
+        if hdr == b'\0\0\0\0\0\0':
+            print('failed fountain decode! ...move along')
+            return False
 
         if not self.fountain:
             self._reset(hdr.total_size)
