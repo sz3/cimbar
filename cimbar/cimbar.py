@@ -159,23 +159,29 @@ def _decode_symbols(ct, img):
         yield i, best_bits, best_cell
 
 
-def _decode_iter(ct, img, color_img):
+def _decode_iter(ct, img, color_img, color_index={}):
     decoding = sorted(_decode_symbols(ct, img))
     if SPLIT_MODE:
         for i, bits, _ in decoding:
-            yield i, bits, conf.BITS_PER_SYMBOL
+            yield i, bits
+        yield -1, None
+
+    # color_index can be set at any time, but it will probably be set by the caller *after* the empty yield above
+    if color_index:
+        print('now would be a good time to use the color index')
+        print(color_index)
 
     print('beginning decode colors pass...')
     for i, bits, cell in decoding:
         testX, testY = cell
         best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
         if SPLIT_MODE:
-            yield i, ct.decode_color(best_cell), BITS_PER_COLOR
+            yield i, ct.decode_color(best_cell)
         else:
-            yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL), bits_per_op()
+            yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL)
 
 
-def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp):
+def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp, color_index={}):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
@@ -208,7 +214,7 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
             der = matrix_colour_correction_Cheung2004(observed, exp)
             ct.ccm = der.dot(white)'''
 
-    yield from _decode_iter(ct, img, color_img)
+    yield from _decode_iter(ct, img, color_img, color_index)
 
     if tempdir:  # cleanup
         with tempdir:
@@ -220,30 +226,41 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
                               conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
+    # potentially could hold on to fountain streaam here?
     dstream = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
             if SPLIT_MODE:
-                writers = [
-                    interleaved_writer(f=outstream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True),
-                    interleaved_writer(f=outstream, bits_per_op=BITS_PER_COLOR, mode='write', keep_open=True)
-                ]
+                first_pass = interleaved_writer(
+                    f=outstream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True
+                )
+                second_pass = interleaved_writer(
+                    f=outstream, bits_per_op=BITS_PER_COLOR, mode='write', keep_open=True
+                )
             else:
-                writers = [
-                    interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True)
-                ]
-            # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
-            current_writer = -1
-            for i, bits, num_bits in decode_iter(imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp):
-                if i == 0:
-                    current_writer += 1
-                block = interleave_lookup[i] // block_size
-                writers[current_writer].write(bits, block)
+                first_pass = interleaved_writer(f=outstream, bits_per_op=bits_per_op(), mode='write', keep_open=True)
+                second_pass = None
 
-            # the reordering magic happens when we flush the writers to the underlying outstream
-            for w in writers:
-                with w:  # flush
-                    pass
+            # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
+            # ok, gonna *have* to rewrite it to get at + pass the fountain header anyway...
+            iw = first_pass
+            color_index = {}
+            for i, bits in decode_iter(
+                    imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp, color_index
+            ):
+                if i == -1:
+                    # flush and move to the second writer
+                    with iw:
+                        pass
+                    iw = second_pass
+                    # TODO: update color_index here?
+                    continue
+                block = interleave_lookup[i] // block_size
+                iw.write(bits, block)
+
+            # flush iw
+            with iw:
+                pass
 
 
 def _get_image_template(width, dark):
