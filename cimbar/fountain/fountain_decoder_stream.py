@@ -44,9 +44,9 @@ class fountain_decoder_stream:
         # get chunk_id and total_size from header
         hdr = fountain_header(buffer[0:fountain_header.length])
 
-        self.headers.append(hdr)
+        self.headers.append(buffer[0:fountain_header.length])
         # sanity check/fail if hdr is bad? Will be all 0s if decode failed...
-        if hdr == b'\0\0\0\0\0\0':
+        if hdr.encode_id == 0 and hdr.total_size == 0 and hdr.chunk_id == 0:
             print('failed fountain decode! ...move along')
             return False
 

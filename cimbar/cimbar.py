@@ -23,7 +23,7 @@ Options:
   -c --colorbits=<0-3>             How many colorbits in the image. [default: 2]
   -e --ecc=<0-200>                 Reed solomon error correction level. 0 is no ecc. [default: auto]
   -f --fountain                    Use fountain encoding scheme.
-  --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq5x5]
+  --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq8x8]
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
   --color-correct=<0-2>            Color correction. 0 is off. 1 is white balance. 2 is 2-pass least squares. [default: 1]
@@ -300,7 +300,7 @@ def _get_image_template(width, dark):
     return img
 
 
-def _get_encoder_stream(src, ecc, fountain, compression_level=6):
+def _get_encoder_stream(src, ecc, fountain, compression_level=16):
     # various checks to set up the instream.
     # the hierarchy is raw bytes -> zstd -> fountain -> reedsolomon -> image
     f = open(src, 'rb')
@@ -322,32 +322,31 @@ def _get_encoder_stream(src, ecc, fountain, compression_level=6):
 
 def encode_iter(src_data, ecc, fountain):
     estream, params = _get_encoder_stream(src_data, ecc, fountain)
-    bits_per = conf.BITS_PER_SYMBOL if SPLIT_MODE else bits_per_op()
-    with estream as instream, bit_file(instream, bits_per_op=bits_per, **params) as f:
-        secondary = None
-        '''
-        if split mode, create secondary stream w/ symbol bytes read directly from instream
-        then create a secondary bit_file(secondary) which we'll read symbol bits from
-        ... reading an additional color_bits from f each iteration
-        '''
-        if SPLIT_MODE:
-            symbols_section_len = capacity(conf.BITS_PER_SYMBOL)
-            secondary = instream.read(symbols_section_len)
-            if len(secondary) < symbols_section_len:
-                secondary += bytes(symbols_section_len - len(secondary))
-            secondary = bit_file(BytesIO(secondary), bits_per_op=BITS_PER_COLOR)
-
+    with estream as instream, bit_file(instream, bits_per_op=bits_per_op(), **params) as f:
         frame_num = 0
         while f.read_count > 0:
             cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
                                       conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
             assert len(cells) == num_cells()
-            for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
-                bits = f.read()
-                if secondary:
-                    bits = secondary.read() | (bits << conf.BITS_PER_SYMBOL)
-                yield bits, x, y, frame_num
+
+            if SPLIT_MODE:
+                symbols = []
+                for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
+                    bits = f.read(conf.BITS_PER_SYMBOL)
+                    symbols.append(bits)
+                symbols.reverse()
+
+                for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
+                    bits = symbols.pop() | (f.read(BITS_PER_COLOR) << conf.BITS_PER_SYMBOL)
+                    yield bits, x, y, frame_num
+
+            else:
+                for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
+                    bits = f.read()
+                    yield bits, x, y, frame_num
+
             frame_num += 1
+        print(f'encoded {frame_num} frames')
 
 
 def encode(src_data, dst_image, dark=False, ecc=conf.ECC, fountain=False):
