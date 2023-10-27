@@ -19,6 +19,7 @@ class sq8x8og:
     INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
     MARKER_SIZE_X = round(54 / CELL_SPACING_X)
     MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
+    SPLIT_MODE=False  # legacy
 
 
 class sq8x8:

@@ -50,7 +50,6 @@ from cimbar.util.clustering import ClusterSituation
 
 
 BITS_PER_COLOR=conf.BITS_PER_COLOR
-SPLIT_MODE=True
 
 
 def get_deskew_params(level):
@@ -63,6 +62,10 @@ def get_deskew_params(level):
 
 def bits_per_op():
     return conf.BITS_PER_SYMBOL + BITS_PER_COLOR
+
+
+def use_split_mode():
+    return getattr(conf, 'SPLIT_MODE', True)
 
 
 def num_cells():
@@ -169,7 +172,7 @@ def _decode_symbols(ct, img):
 
 def _decode_iter(ct, img, color_img, color_index={}):
     decoding = sorted(_decode_symbols(ct, img))
-    if SPLIT_MODE:
+    if use_split_mode():
         for i, bits, _ in decoding:
             yield i, bits
         yield -1, None
@@ -183,7 +186,7 @@ def _decode_iter(ct, img, color_img, color_index={}):
     for i, bits, cell in decoding:
         testX, testY = cell
         best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
-        if SPLIT_MODE:
+        if use_split_mode():
             yield i, ct.decode_color(best_cell)
         else:
             yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL)
@@ -238,7 +241,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     dstream, fount = _get_decoder_stream(outfile, ecc, fountain)
     with dstream as outstream:
         for imgf in src_images:
-            if SPLIT_MODE:
+            if use_split_mode():
                 first_pass = interleaved_writer(
                     f=outstream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True
                 )
@@ -329,7 +332,7 @@ def encode_iter(src_data, ecc, fountain):
                                       conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
             assert len(cells) == num_cells()
 
-            if SPLIT_MODE:
+            if use_split_mode():
                 symbols = []
                 for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
                     bits = f.read(conf.BITS_PER_SYMBOL)
