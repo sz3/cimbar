@@ -2,7 +2,7 @@ from .header import fountain_header
 
 
 class fountain_encoder_stream:
-    def __init__(self, f, chunk_size, encode_id=0):
+    def __init__(self, f, chunk_size, encode_id=108):
         self.buffer = b''
         self.read_size = chunk_size
         self.chunk_size = chunk_size - fountain_header.length

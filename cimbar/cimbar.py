@@ -7,7 +7,7 @@ Usage:
                          [--colorbits=<0-3>] [--deskew=<0-2>] [--ecc=<0-200>]
                          [--fountain] [--preprocess=<0,1>] [--color-correct=<0-2>]
   ./cimbar.py --encode (<src_data> | --src_data=<filename>) (<output> | --output=<filename>)
-                       [--config=<sq8x8,sq5x5,sq5x6>] [--dark | --light]
+                       [--config=<sq8x8,og8x8,sq5x5,sq5x6>] [--dark | --light]
                        [--colorbits=<0-3>] [--ecc=<0-150>] [--fountain]
   ./cimbar.py (-h | --help)
 
@@ -30,6 +30,7 @@ Options:
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
+from collections import defaultdict
 from io import BytesIO
 from os import path
 from tempfile import TemporaryDirectory
@@ -44,6 +45,7 @@ from cimbar.deskew.deskewer import deskewer
 from cimbar.encode.cell_positions import cell_positions, AdjacentCellFinder, FloodDecodeOrder
 from cimbar.encode.cimb_translator import CimbEncoder, CimbDecoder, avg_color, possible_colors
 from cimbar.encode.rss import reed_solomon_stream
+from cimbar.fountain.header import fountain_header
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
 from cimbar.util.clustering import ClusterSituation
@@ -83,6 +85,68 @@ def capacity(bits_per_op=bits_per_op()):
 def _fountain_chunk_size(ecc=conf.ECC, bits_per_op=bits_per_op(), fountain_blocks=conf.FOUNTAIN_BLOCKS):
     fountain_blocks = fountain_blocks or num_fountain_blocks()
     return capacity(bits_per_op) * (conf.ECC_BLOCK_SIZE-ecc) // conf.ECC_BLOCK_SIZE // fountain_blocks
+
+
+def _get_expected_fountain_headers(headers, bits_per_symbol=conf.BITS_PER_SYMBOL, bits_per_color=BITS_PER_COLOR):
+    import bitstring
+    from bitstring import Bits, BitStream
+
+    # convert to ints, and derive the expected ids
+    next_frame = bits_per_symbol * 2
+
+    for header in headers:
+        if not header.bad():
+            break
+        next_frame -= 1
+
+    # if not, we're in trouble
+    assert next_frame > 0
+    header.chunk_id += next_frame
+    color_headers = []
+    for _ in range(bits_per_color * 2):
+        color_headers += bytes(header)
+        header.chunk_id += 1
+
+    print(color_headers)
+
+    res = []
+    stream = BitStream()
+    stream.append(Bits(bytes=color_headers))
+    while stream.pos < stream.length:
+        res.append(stream.read(f'uint:{bits_per_color}'))
+    return res
+
+
+def _get_fountain_header_cell_index(cells, expected_vals):
+    # TODO: misleading to say this works for all FOUNTAIN_BLOCKS values...
+    fountain_blocks = conf.FOUNTAIN_BLOCKS or num_fountain_blocks()
+    end = capacity(BITS_PER_COLOR) * 8 // BITS_PER_COLOR
+    header_start_interval = capacity(bits_per_op()) * 8 // fountain_blocks // BITS_PER_COLOR
+    header_len = fountain_header.length * 8 // BITS_PER_COLOR
+
+    cell_idx = []
+    i = 0
+    while i < end:
+        # maybe split this into a list of lists? idk
+        cell_idx += list(range(i, i+header_len))
+        i += header_start_interval
+
+    # sanity check, we're doomed if this fails
+    assert len(cell_idx) == len(expected_vals), f'{len(cell_idx)} == {len(expected_vals)}'
+    res = defaultdict(list)
+    for idx,exp in zip(cell_idx, expected_vals):
+        res[exp].append(cells[idx])
+    return res
+
+
+def _build_color_decode_lookups(ct, color_img, color_map):
+    for exp, pos_list in color_map.items():
+        for pos in pos_list:
+            cell = _crop_cell(color_img, pos[0], pos[1])
+            color = avg_color(cell, dark=True)
+            bits = ct.decode_color(cell)
+            if bits != exp:
+                print(f' wrong!!! {pos} ... {bits} == {exp}')
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -158,6 +222,10 @@ def compute_tint(img, dark):
     return cc['r'], cc['g'], cc['b']
 
 
+def _crop_cell(img, x, y):
+    return img.crop((x+1, y+1, x + conf.CELL_SIZE-1, y + conf.CELL_SIZE-1))
+
+
 def _decode_symbols(ct, img):
     cell_pos, num_edge_cells = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X,
                                               conf.CELL_DIM_Y, conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
@@ -170,7 +238,7 @@ def _decode_symbols(ct, img):
         yield i, best_bits, best_cell
 
 
-def _decode_iter(ct, img, color_img, color_index={}):
+def _decode_iter(ct, img, color_img, color_map={}):
     decoding = sorted(_decode_symbols(ct, img))
     if use_split_mode():
         for i, bits, _ in decoding:
@@ -178,14 +246,16 @@ def _decode_iter(ct, img, color_img, color_index={}):
         yield -1, None
 
     # color_index can be set at any time, but it will probably be set by the caller *after* the empty yield above
-    if color_index:
+    if color_map:
         print('now would be a good time to use the color index')
-        print(color_index)
+        print(color_map)
+        _build_color_decode_lookups(ct, color_img, color_map)
+        # ct.update_colors()
 
     print('beginning decode colors pass...')
     for i, bits, cell in decoding:
         testX, testY = cell
-        best_cell = color_img.crop((testX+1, testY+1, testX + conf.CELL_SIZE-1, testY + conf.CELL_SIZE-1))
+        best_cell = _crop_cell(color_img, testX, testY)
         if use_split_mode():
             yield i, ct.decode_color(best_cell)
         else:
@@ -255,9 +325,9 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
             # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
             # ok, gonna *have* to rewrite it to get at + pass the fountain header anyway...
             iw = first_pass
-            color_index = {}
+            color_map = {}
             for i, bits in decode_iter(
-                    imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp, color_index
+                    imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp, color_map
             ):
                 if i == -1:
                     # flush and move to the second writer
@@ -265,8 +335,17 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                         pass
                     iw = second_pass
                     if fount:
-                        print(fount.headers)
-                        # TODO: update color_index here?
+                        header_cell_locs = _get_fountain_header_cell_index(
+                            list(interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)),
+                            _get_expected_fountain_headers(fount.headers),
+                        )
+                        print(header_cell_locs)
+
+                        for exp,pos in header_cell_locs.items():
+                            color_map[exp] = pos
+
+                        # using our expected values, check w/  image to get new color_index truth values?
+                        # TODO: update color_map here?
                     continue
                 block = interleave_lookup[i] // block_size
                 iw.write(bits, block)
@@ -337,6 +416,9 @@ def encode_iter(src_data, ecc, fountain):
                 for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
                     bits = f.read(conf.BITS_PER_SYMBOL)
                     symbols.append(bits)
+
+                # there are better ways to do this than reverse+pop...
+                # the important part is that it's a 2-pass approach
                 symbols.reverse()
 
                 for x, y in interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS):
@@ -373,7 +455,7 @@ def encode(src_data, dst_image, dark=False, ecc=conf.ECC, fountain=False):
 
 
 def main():
-    args = docopt(__doc__, version='cimbar 0.5.13')
+    args = docopt(__doc__, version='cimbar 0.6.0')
 
     global BITS_PER_COLOR
     BITS_PER_COLOR = int(args.get('--colorbits'))

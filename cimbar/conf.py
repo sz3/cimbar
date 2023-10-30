@@ -1,7 +1,7 @@
 import sys
 
 
-class sq8x8og:
+class og8x8:
     TOTAL_SIZE = 1024
     BITS_PER_SYMBOL = 4
     BITS_PER_COLOR = 2
