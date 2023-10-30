@@ -91,21 +91,18 @@ def _get_expected_fountain_headers(headers, bits_per_symbol=conf.BITS_PER_SYMBOL
     import bitstring
     from bitstring import Bits, BitStream
 
-    # convert to ints, and derive the expected ids
-    next_frame = bits_per_symbol * 2
-
+    # it'd be nice to use the frame id as well, but sometimes we skip frames.
+    # specifically, at the end of the input data (so when num_cunks*chunk size ~= file size)
+    # we will usually skip a frame (whenever the last chunk is not conveniently equal to the frame size)
+    # we *could* do that math and use the frame id anyway, it might be worth it...
     for header in headers:
         if not header.bad():
             break
-        next_frame -= 1
+    assert not header.bad()  # TODO: maybe just return NULL?
 
-    # if not, we're in trouble
-    assert next_frame > 0
-    header.chunk_id += next_frame
     color_headers = []
     for _ in range(bits_per_color * 2):
-        color_headers += bytes(header)
-        header.chunk_id += 1
+        color_headers += bytes(header)[:-2]  # remove frame id
 
     print(color_headers)
 
@@ -122,7 +119,7 @@ def _get_fountain_header_cell_index(cells, expected_vals):
     fountain_blocks = conf.FOUNTAIN_BLOCKS or num_fountain_blocks()
     end = capacity(BITS_PER_COLOR) * 8 // BITS_PER_COLOR
     header_start_interval = capacity(bits_per_op()) * 8 // fountain_blocks // BITS_PER_COLOR
-    header_len = fountain_header.length * 8 // BITS_PER_COLOR
+    header_len = (fountain_header.length-2) * 8 // BITS_PER_COLOR
 
     cell_idx = []
     i = 0
@@ -335,6 +332,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                         pass
                     iw = second_pass
                     if fount:
+                        # TODO: can't use the default cell pos, we need the floodfilldecode outputs!
                         header_cell_locs = _get_fountain_header_cell_index(
                             list(interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)),
                             _get_expected_fountain_headers(fount.headers),
