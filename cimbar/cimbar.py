@@ -137,13 +137,33 @@ def _get_fountain_header_cell_index(cells, expected_vals):
 
 
 def _build_color_decode_lookups(ct, color_img, color_map):
+    res = defaultdict(list)
     for exp, pos_list in color_map.items():
         for pos in pos_list:
             cell = _crop_cell(color_img, pos[0], pos[1])
             color = avg_color(cell, dark=True)
+            res[exp].append(color)
             bits = ct.decode_color(cell)
             if bits != exp:
                 print(f' wrong!!! {pos} ... {bits} == {exp}')
+
+    # return averages
+    return {
+        k: tuple(numpy.mean(vals, axis=0)) for k,vals in res.items()
+    }
+
+
+def _derive_color_lookups(ct, color_img, cells, fount_headers):
+    header_cell_locs = _get_fountain_header_cell_index(
+        list(interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)),
+        _get_expected_fountain_headers(fount_headers),
+    )
+    print(header_cell_locs)
+
+    color_map = dict()
+    for exp,pos in header_cell_locs.items():
+        color_map[exp] = pos
+    return _build_color_decode_lookups(ct, color_img, color_map)
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -235,7 +255,7 @@ def _decode_symbols(ct, img):
         yield i, best_bits, best_cell
 
 
-def _decode_iter(ct, img, color_img, color_map={}):
+def _decode_iter(ct, img, color_img, state_info={}):
     decoding = sorted(_decode_symbols(ct, img))
     if use_split_mode():
         for i, bits, _ in decoding:
@@ -243,10 +263,12 @@ def _decode_iter(ct, img, color_img, color_map={}):
         yield -1, None
 
     # color_index can be set at any time, but it will probably be set by the caller *after* the empty yield above
-    if color_map:
+    if state_info.get('headers'):
         print('now would be a good time to use the color index')
-        print(color_map)
-        _build_color_decode_lookups(ct, color_img, color_map)
+        cells = [cell for _, __, cell in decoding]
+        color_lookups = _derive_color_lookups(ct, color_img, cells, state_info.get('headers'))
+        print('color lookups:')
+        print(color_lookups)
         # ct.update_colors()
 
     print('beginning decode colors pass...')
@@ -322,9 +344,9 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
             # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
             # ok, gonna *have* to rewrite it to get at + pass the fountain header anyway...
             iw = first_pass
-            color_map = {}
+            state_info = {}
             for i, bits in decode_iter(
-                    imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp, color_map
+                    imgf, dark, force_preprocess, color_correct, deskew, auto_dewarp, state_info
             ):
                 if i == -1:
                     # flush and move to the second writer
@@ -333,14 +355,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                     iw = second_pass
                     if fount:
                         # TODO: can't use the default cell pos, we need the floodfilldecode outputs!
-                        header_cell_locs = _get_fountain_header_cell_index(
-                            list(interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)),
-                            _get_expected_fountain_headers(fount.headers),
-                        )
-                        print(header_cell_locs)
-
-                        for exp,pos in header_cell_locs.items():
-                            color_map[exp] = pos
+                        state_info['headers'] = fount.headers
 
                         # using our expected values, check w/  image to get new color_index truth values?
                         # TODO: update color_map here?
