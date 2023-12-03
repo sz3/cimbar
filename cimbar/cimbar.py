@@ -141,7 +141,7 @@ def _build_color_decode_lookups(ct, color_img, color_map):
     for exp, pos_list in color_map.items():
         for pos in pos_list:
             cell = _crop_cell(color_img, pos[0], pos[1])
-            color = avg_color(cell, dark=True)
+            color = avg_color(cell, dark=ct.dark)
             res[exp].append(color)
             bits = ct.decode_color(cell)
             if bits != exp:
@@ -343,6 +343,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                               conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
     dstream, fount = _get_decoder_stream(outfile, ecc, fountain)
+    dupe_stream = dupe_pass = None
     if color_correct >= 3 and not fount:
         dupe_stream, fount = _get_decoder_stream('/dev/null', ecc, True)
     with dstream as outstream:
