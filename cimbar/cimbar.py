@@ -270,17 +270,22 @@ def _decode_iter(ct, img, color_img, state_info={}):
         print('color lookups:')
         print(color_lookups)
 
-        exp = numpy.array(possible_colors(True, BITS_PER_COLOR))
-        observed = numpy.array([v for k,v in sorted(color_lookups.items())])
-        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-        der = matrix_colour_correction_Cheung2004(observed, exp)
+        if state_info['color_correct'] in (3, 4):
+            exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR))
+            observed = numpy.array([v for k,v in sorted(color_lookups.items())])
+            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+            der = matrix_colour_correction_Cheung2004(observed, exp)
 
-        # not sure which of this would be better...
-        if ct.ccm is not None:
-            ct.ccm = der.dot(ct.ccm)
-        else:
-            ct.ccm = der
-        # ct.update_colors()
+            # not sure which of this would be better...
+            if ct.ccm is not None:
+                ct.ccm = der.dot(ct.ccm)
+            else:
+                ct.ccm = der
+        if state_info['color_correct'] == 4:
+            ct.colors = color_lookups
+        if state_info['color_correct'] == 5:
+            ct.disable_color_scaling = True
+            ct.colors = color_lookups
 
     print('beginning decode colors pass...')
     for i, bits, cell in decoding:
@@ -338,7 +343,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                               conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
     dstream, fount = _get_decoder_stream(outfile, ecc, fountain)
-    if color_correct == 3 and not fount:
+    if color_correct >= 3 and not fount:
         dupe_stream, fount = _get_decoder_stream('/dev/null', ecc, True)
     with dstream as outstream:
         for imgf in src_images:
@@ -374,6 +379,7 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                     iw = second_pass
                     if fount:
                         state_info['headers'] = fount.headers
+                        state_info['color_correct'] = color_correct
                     continue
                 block = interleave_lookup[i] // block_size
                 iw.write(bits, block)

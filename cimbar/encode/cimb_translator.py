@@ -97,6 +97,7 @@ class CimbDecoder:
 
         self.color_correct = color_correct
         self.ccm = ccm
+        self.disable_color_scaling = False
 
         all_colors = possible_colors(dark, color_bits)
         self.colors = {c: all_colors[c] for c in range(2 ** color_bits)}
@@ -140,6 +141,8 @@ class CimbDecoder:
         return c
 
     def scale_color(self, r, g, b):
+        if self.disable_color_scaling:
+            return r, g, b
         if self.dark:
             max_val = max(r, g, b, 1)
             min_val = min(r, g, b, max_val-100)
