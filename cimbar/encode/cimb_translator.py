@@ -131,13 +131,35 @@ class CimbDecoder:
         #return (c[0] - d[0])**2 + (c[1] - d[1])**2 + (c[2] - d[2])**2
         return relative_color_diff(c, d)
 
-    def _scale_color(self, c, adjust, down):
+    def _scale_adjust(self, c, adjust, down):
         c = int((c - down) * adjust)
         if c > 245:
             c = 255
         if c < 0:
             c = 0
         return c
+
+    def scale_color(self, r, g, b):
+        if self.dark:
+            max_val = max(r, g, b, 1)
+            min_val = min(r, g, b, max_val-100)
+            if min_val >= max_val:
+                min_val = 0
+            adjust = 255.0 / (max_val - min_val)
+            r = self._scale_adjust(r, adjust, min_val)
+            g = self._scale_adjust(g, adjust, min_val)
+            b = self._scale_adjust(b, adjust, min_val)
+        else:
+            min_val = min(r, g, b)
+            max_val = max(r, g, b, 1)
+            if max_val - min_val < 20:
+                r = g = b = 0
+            else:
+                adjust = 255.0 / (max_val - min_val)
+                r = self._scale_adjust(r, adjust, min_val)
+                g = self._scale_adjust(g, adjust, min_val)
+                b = self._scale_adjust(b, adjust, min_val)
+        return r, g, b
 
     def _correct_all_colors(self, r, g, b):
         if self.ccm is not None:
@@ -155,25 +177,7 @@ class CimbDecoder:
         #print(f'{r} {g} {b}')
 
         # probably some scaling will be good.
-        if self.dark:
-            max_val = max(r, g, b, 1)
-            min_val = min(r, g, b, max_val-100)
-            if min_val >= max_val:
-                min_val = 0
-            adjust = 255.0 / (max_val - min_val)
-            r = self._scale_color(r, adjust, min_val)
-            g = self._scale_color(g, adjust, min_val)
-            b = self._scale_color(b, adjust, min_val)
-        else:
-            min_val = min(r, g, b)
-            max_val = max(r, g, b, 1)
-            if max_val - min_val < 20:
-                r = g = b = 0
-            else:
-                adjust = 255.0 / (max_val - min_val)
-                r = self._scale_color(r, adjust, min_val)
-                g = self._scale_color(g, adjust, min_val)
-                b = self._scale_color(b, adjust, min_val)
+        r, g, b = self.scale_color(r, g, b)
 
         color_in = (r, g, b)
         self.color_metrics.append(color_in)

@@ -269,6 +269,17 @@ def _decode_iter(ct, img, color_img, state_info={}):
         color_lookups = _derive_color_lookups(ct, color_img, cells, state_info.get('headers'))
         print('color lookups:')
         print(color_lookups)
+
+        exp = numpy.array(possible_colors(True, BITS_PER_COLOR))
+        observed = numpy.array([v for k,v in sorted(color_lookups.items())])
+        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+        der = matrix_colour_correction_Cheung2004(observed, exp)
+
+        # not sure which of this would be better...
+        if ct.ccm is not None:
+            ct.ccm = der.dot(ct.ccm)
+        else:
+            ct.ccm = der
         # ct.update_colors()
 
     print('beginning decode colors pass...')
@@ -281,11 +292,11 @@ def _decode_iter(ct, img, color_img, state_info={}):
             yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL)
 
 
-def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp, color_index={}):
+def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp, state_info={}):
     tempdir = None
     if deskew:
         tempdir = TemporaryDirectory()
-        temp_img = path.join(tempdir.name, path.basename(src_image))
+        temp_img = path.join(tempdir.name, path.basename(src_image))  # or /tmp
         dims = detect_and_deskew(src_image, temp_img, dark, auto_dewarp)
         if should_preprocess < 0:
             should_preprocess = dims[0] < conf.TOTAL_SIZE or dims[1] < conf.TOTAL_SIZE
@@ -314,7 +325,7 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
             der = matrix_colour_correction_Cheung2004(observed, exp)
             ct.ccm = der.dot(white)'''
 
-    yield from _decode_iter(ct, img, color_img, color_index)
+    yield from _decode_iter(ct, img, color_img, state_info)
 
     if tempdir:  # cleanup
         with tempdir:
@@ -326,14 +337,19 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
     cells, _ = cell_positions(conf.CELL_SPACING_X, conf.CELL_SPACING_Y, conf.CELL_DIM_X, conf.CELL_DIM_Y,
                               conf.CELLS_OFFSET, conf.MARKER_SIZE_X, conf.MARKER_SIZE_Y)
     interleave_lookup, block_size = interleave_reverse(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)
-    # potentially could hold on to fountain streaam here?
     dstream, fount = _get_decoder_stream(outfile, ecc, fountain)
+    if color_correct == 3 and not fount:
+        dupe_stream, fount = _get_decoder_stream('/dev/null', ecc, True)
     with dstream as outstream:
         for imgf in src_images:
             if use_split_mode():
                 first_pass = interleaved_writer(
                     f=outstream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True
                 )
+                if dupe_stream:
+                    dupe_pass = interleaved_writer(
+                        f=dupe_stream, bits_per_op=conf.BITS_PER_SYMBOL, mode='write', keep_open=True
+                    )
                 second_pass = interleaved_writer(
                     f=outstream, bits_per_op=BITS_PER_COLOR, mode='write', keep_open=True
                 )
@@ -352,16 +368,17 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                     # flush and move to the second writer
                     with iw:
                         pass
+                    if dupe_pass:
+                        with dupe_pass:
+                            pass
                     iw = second_pass
                     if fount:
-                        # TODO: can't use the default cell pos, we need the floodfilldecode outputs!
                         state_info['headers'] = fount.headers
-
-                        # using our expected values, check w/  image to get new color_index truth values?
-                        # TODO: update color_map here?
                     continue
                 block = interleave_lookup[i] // block_size
                 iw.write(bits, block)
+                if dupe_pass:
+                    dupe_pass.write(bits, block)
 
             # flush iw
             with iw:
