@@ -262,7 +262,7 @@ def _decode_iter(ct, img, color_img, state_info={}):
             yield i, bits
         yield -1, None
 
-    # color_index can be set at any time, but it will probably be set by the caller *after* the empty yield above
+    # state_info can be set at any time, but it will probably be set by the caller *after* the empty yield above
     if state_info.get('headers'):
         print('now would be a good time to use the color index')
         cells = [cell for _, __, cell in decoding]
@@ -270,20 +270,25 @@ def _decode_iter(ct, img, color_img, state_info={}):
         print('color lookups:')
         print(color_lookups)
 
-        if state_info['color_correct'] in (3, 4):
+        #matrix_colour_correction_Cheung2004
+        #matrix_colour_correction_Finlayson2015
+
+
+        cc_setting = state_info['color_correct']
+        if cc_setting in (3, 4, 5):
             exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR))
             observed = numpy.array([v for k,v in sorted(color_lookups.items())])
             from colour.characterisation.correction import matrix_colour_correction_Cheung2004
             der = matrix_colour_correction_Cheung2004(observed, exp)
 
             # not sure which of this would be better...
-            if ct.ccm is not None:
-                ct.ccm = der.dot(ct.ccm)
-            else:
+            if ct.ccm is None or cc_setting == 4:
                 ct.ccm = der
-        if state_info['color_correct'] == 4:
+            else:  # cc_setting == 3,5
+                ct.ccm = der.dot(ct.ccm)
+        if cc_setting == 5:
             ct.colors = color_lookups
-        if state_info['color_correct'] == 5:
+        if cc_setting == 6:
             ct.disable_color_scaling = True
             ct.colors = color_lookups
 
