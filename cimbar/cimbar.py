@@ -143,7 +143,7 @@ def _build_color_decode_lookups(ct, color_img, color_map):
             cell = _crop_cell(color_img, pos[0], pos[1])
             color = avg_color(cell, dark=ct.dark)
             res[exp].append(color)
-            bits = ct.decode_color(cell)
+            bits = ct.decode_color(cell, 0)
             if bits != exp:
                 print(f' wrong!!! {pos} ... {bits} == {exp}')
 
@@ -153,17 +153,47 @@ def _build_color_decode_lookups(ct, color_img, color_map):
     }
 
 
-def _derive_color_lookups(ct, color_img, cells, fount_headers):
+def _decode_sector_calc(midpt, x, y, num_sectors):
+    if num_sectors < 2:
+        return 0
+    if (x - midpt[0])**2 + (y - midpt[1])**2 < 400**2:
+        return 0
+    else:
+        return 1
+
+
+def _derive_color_lookups(ct, color_img, cells, fount_headers, splits=0):
     header_cell_locs = _get_fountain_header_cell_index(
         list(interleave(cells, conf.INTERLEAVE_BLOCKS, conf.INTERLEAVE_PARTITIONS)),
         _get_expected_fountain_headers(fount_headers),
     )
     print(header_cell_locs)
 
-    color_map = dict()
-    for exp,pos in header_cell_locs.items():
-        color_map[exp] = pos
-    return _build_color_decode_lookups(ct, color_img, color_map)
+    color_maps = []
+    if splits == 2:
+        center_map = defaultdict(list)
+        edge_map = defaultdict(list)
+        midX = conf.TOTAL_SIZE // 2
+        midY = conf.TOTAL_SIZE // 2
+        for exp,pos in header_cell_locs.items():
+            for xy in pos:
+                if _decode_sector_calc((midX, midY), *xy, splits) == 0:
+                    center_map[exp].append(xy)
+                else:
+                    edge_map[exp].append(xy)
+
+        lc = {exp: len(pos) for exp, pos in center_map.items()}
+        le = {exp: len(pos) for exp, pos in edge_map.items()}
+        print(f'sanity check. len(center)={lc}, len(edge)={le}')
+        color_maps = [center_map, edge_map]
+
+    else:
+        color_map = dict()
+        for exp,pos in header_cell_locs.items():
+            color_map[exp] = pos
+        color_maps = [color_map]
+
+    return [_build_color_decode_lookups(ct, color_img, cm) for cm in color_maps]
 
 
 def detect_and_deskew(src_image, temp_image, dark, auto_dewarp=False):
@@ -265,19 +295,20 @@ def _decode_iter(ct, img, color_img, state_info={}):
     # state_info can be set at any time, but it will probably be set by the caller *after* the empty yield above
     if state_info.get('headers'):
         print('now would be a good time to use the color index')
+        cc_setting = state_info['color_correct']
+        splits = 2 if cc_setting in (6, 7) else 0
+
         cells = [cell for _, __, cell in decoding]
-        color_lookups = _derive_color_lookups(ct, color_img, cells, state_info.get('headers'))
+        color_lookups = _derive_color_lookups(ct, color_img, cells, state_info.get('headers'), splits)
         print('color lookups:')
         print(color_lookups)
 
         #matrix_colour_correction_Cheung2004
         #matrix_colour_correction_Finlayson2015
 
-
-        cc_setting = state_info['color_correct']
         if cc_setting in (3, 4, 5):
             exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR))
-            observed = numpy.array([v for k,v in sorted(color_lookups.items())])
+            observed = numpy.array([v for k,v in sorted(color_lookups[0].items())])
             from colour.characterisation.correction import matrix_colour_correction_Cheung2004
             der = matrix_colour_correction_Cheung2004(observed, exp)
 
@@ -286,20 +317,40 @@ def _decode_iter(ct, img, color_img, state_info={}):
                 ct.ccm = der
             else:  # cc_setting == 3,5
                 ct.ccm = der.dot(ct.ccm)
+
+        if splits:
+            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+            exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR))
+            ccms = list()
+            i = 0
+            while i < splits:
+                observed = numpy.array([v for k,v in sorted(color_lookups[i].items())])
+                der = matrix_colour_correction_Cheung2004(observed, exp)
+                ccms.append(der)
+                i += 1
+
+            if ct.ccm is None or cc_setting == 7:
+                ct.ccm = ccms
+            else:
+                ct.ccm = [der.dot(ct.ccm) for der in ccms]
+
         if cc_setting == 5:
-            ct.colors = color_lookups
-        if cc_setting == 6:
+            ct.colors = color_lookups[0]
+        if cc_setting == 10:
             ct.disable_color_scaling = True
-            ct.colors = color_lookups
+            ct.colors = color_lookups[0]
 
     print('beginning decode colors pass...')
+    midX = conf.TOTAL_SIZE // 2
+    midY = conf.TOTAL_SIZE // 2
     for i, bits, cell in decoding:
         testX, testY = cell
         best_cell = _crop_cell(color_img, testX, testY)
+        decode_sector = 0 if ct.ccm is None else _decode_sector_calc((midX, midY), testX, testY, len(ct.ccm))
         if use_split_mode():
-            yield i, ct.decode_color(best_cell)
+            yield i, ct.decode_color(best_cell, 0)
         else:
-            yield i, bits + (ct.decode_color(best_cell) << conf.BITS_PER_SYMBOL)
+            yield i, bits + (ct.decode_color(best_cell, 0) << conf.BITS_PER_SYMBOL)
 
 
 def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_dewarp, state_info={}):

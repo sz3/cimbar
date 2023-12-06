@@ -164,9 +164,13 @@ class CimbDecoder:
                 b = self._scale_adjust(b, adjust, min_val)
         return r, g, b
 
-    def _correct_all_colors(self, r, g, b):
-        if self.ccm is not None:
-            r, g, b = self.ccm.dot(numpy.array([r, g, b]))
+    def _correct_all_colors(self, r, g, b, sector):
+        if isinstance(self.ccm, list):
+            ccm = self.ccm[sector]
+        else:
+            ccm = self.ccm
+        if ccm is not None:
+            r, g, b = ccm.dot(numpy.array([r, g, b]))
         return r, g, b
 
     def _update_metrics(self, i, c, color_in):
@@ -175,8 +179,8 @@ class CimbDecoder:
         if real_distance < stats[0]:
             self.color_metrics[i] = (real_distance, color_in)
 
-    def best_color(self, r, g, b):
-        r, g, b = self._correct_all_colors(r, g, b)
+    def best_color(self, r, g, b, sector):
+        r, g, b = self._correct_all_colors(r, g, b, sector)
         #print(f'{r} {g} {b}')
 
         # probably some scaling will be good.
@@ -199,13 +203,13 @@ class CimbDecoder:
                 #    break
         return best_fit
 
-    def decode_color(self, img_cell):
+    def decode_color(self, img_cell, sector):
         if len(self.colors) <= 1:
             return 0
 
         r, g, b = avg_color(img_cell, self.dark)
         # count colors?
-        return self.best_color(r, g, b)
+        return self.best_color(r, g, b, sector)
 
 
 class CimbEncoder:
