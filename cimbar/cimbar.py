@@ -287,6 +287,49 @@ def _decode_symbols(ct, img):
         yield i, best_bits, best_cell
 
 
+def _calc_ccm(ct, color_lookups, cc_setting, state_info):
+    splits = 2 if cc_setting in (6, 7) else 0
+    if cc_setting in (3, 4, 5):
+        possible = possible_colors(ct.dark, BITS_PER_COLOR)
+        #if len(color_lookups[0]) < len(possible):
+        #    return
+        exp = [color for i,color in enumerate(possible) if i in color_lookups[0]] + [(255,255,255)]
+        exp = numpy.array(exp)
+        white = state_info['white']
+        observed = numpy.array([v for k,v in sorted(color_lookups[0].items())] + [white])
+        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+        der = matrix_colour_correction_Cheung2004(observed, exp)
+
+        # not sure which of this would be better...
+        if ct.ccm is None or cc_setting == 4:
+            ct.ccm = der
+        else:  # cc_setting == 3,5
+            ct.ccm = der.dot(ct.ccm)
+
+    if splits:  # 6,7
+        from colour.characterisation.correction import matrix_colour_correction_Cheung2004
+        exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR) + [(255,255,255)])
+        white = state_info['white']
+        ccms = list()
+        i = 0
+        while i < splits:
+            observed = numpy.array([v for k,v in sorted(color_lookups[i].items())] + [white])
+            der = matrix_colour_correction_Cheung2004(observed, exp)
+            ccms.append(der)
+            i += 1
+
+        if ct.ccm is None or cc_setting == 7:
+            ct.ccm = ccms
+        else:
+            ct.ccm = [der.dot(ct.ccm) for der in ccms]
+
+    if cc_setting == 5:
+        ct.colors = color_lookups[0]
+    if cc_setting == 10:
+        ct.disable_color_scaling = True
+        ct.colors = color_lookups[0]
+
+
 def _decode_iter(ct, img, color_img, state_info={}):
     decoding = sorted(_decode_symbols(ct, img))
     if use_split_mode():
@@ -308,41 +351,7 @@ def _decode_iter(ct, img, color_img, state_info={}):
         #matrix_colour_correction_Cheung2004
         #matrix_colour_correction_Finlayson2015
 
-        if cc_setting in (3, 4, 5):
-            exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR) + [(255,255,255)])
-            white = state_info['white']
-            observed = numpy.array([v for k,v in sorted(color_lookups[0].items())] + [white])
-            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-            der = matrix_colour_correction_Cheung2004(observed, exp)
-
-            # not sure which of this would be better...
-            if ct.ccm is None or cc_setting == 4:
-                ct.ccm = der
-            else:  # cc_setting == 3,5
-                ct.ccm = der.dot(ct.ccm)
-
-        if splits:  # 6,7
-            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-            exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR) + [(255,255,255)])
-            white = state_info['white']
-            ccms = list()
-            i = 0
-            while i < splits:
-                observed = numpy.array([v for k,v in sorted(color_lookups[i].items())] + [white])
-                der = matrix_colour_correction_Cheung2004(observed, exp)
-                ccms.append(der)
-                i += 1
-
-            if ct.ccm is None or cc_setting == 7:
-                ct.ccm = ccms
-            else:
-                ct.ccm = [der.dot(ct.ccm) for der in ccms]
-
-        if cc_setting == 5:
-            ct.colors = color_lookups[0]
-        if cc_setting == 10:
-            ct.disable_color_scaling = True
-            ct.colors = color_lookups[0]
+        _calc_ccm(ct, color_lookups, cc_setting, state_info)
 
     print('beginning decode colors pass...')
     midX = conf.TOTAL_SIZE // 2
@@ -581,4 +590,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
