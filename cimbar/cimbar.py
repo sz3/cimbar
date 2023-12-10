@@ -260,10 +260,12 @@ def compute_tint(img, dark):
     else:
         pos = [(67, 0), (0, 67), (conf.TOTAL_SIZE-79, 0), (0, conf.TOTAL_SIZE-79)]
 
+    colors = []
     for x, y in pos:
         iblock = img.crop((x, y, x + 4, y + 4))
-        r, g, b = avg_color(iblock, False)
-        update(cc, *avg_color(iblock, False))
+        ac = avg_color(iblock, False)
+        colors.append(ac)
+        update(cc, *ac)
 
     print(f'tint is {cc}')
     return cc['r'], cc['g'], cc['b']
@@ -285,15 +287,16 @@ def _decode_symbols(ct, img):
         yield i, best_bits, best_cell
 
 
-def _calc_ccm(ct, color_lookups, cc_setting):
+def _calc_ccm(ct, color_lookups, cc_setting, state_info):
     splits = 2 if cc_setting in (6, 7) else 0
     if cc_setting in (3, 4, 5):
         possible = possible_colors(ct.dark, BITS_PER_COLOR)
         #if len(color_lookups[0]) < len(possible):
         #    return
-        exp = [color for i,color in enumerate(possible) if i in color_lookups[0]]
+        exp = [color for i,color in enumerate(possible) if i in color_lookups[0]] + [(255,255,255)]
         exp = numpy.array(exp)
-        observed = numpy.array([v for k,v in sorted(color_lookups[0].items())])
+        white = state_info['white']
+        observed = numpy.array([v for k,v in sorted(color_lookups[0].items())] + [white])
         from colour.characterisation.correction import matrix_colour_correction_Cheung2004
         der = matrix_colour_correction_Cheung2004(observed, exp)
 
@@ -303,13 +306,14 @@ def _calc_ccm(ct, color_lookups, cc_setting):
         else:  # cc_setting == 3,5
             ct.ccm = der.dot(ct.ccm)
 
-    if splits:
+    if splits:  # 6,7
         from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-        exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR))
+        exp = numpy.array(possible_colors(ct.dark, BITS_PER_COLOR) + [(255,255,255)])
+        white = state_info['white']
         ccms = list()
         i = 0
         while i < splits:
-            observed = numpy.array([v for k,v in sorted(color_lookups[i].items())])
+            observed = numpy.array([v for k,v in sorted(color_lookups[i].items())] + [white])
             der = matrix_colour_correction_Cheung2004(observed, exp)
             ccms.append(der)
             i += 1
@@ -318,6 +322,12 @@ def _calc_ccm(ct, color_lookups, cc_setting):
             ct.ccm = ccms
         else:
             ct.ccm = [der.dot(ct.ccm) for der in ccms]
+
+    if cc_setting == 5:
+        ct.colors = color_lookups[0]
+    if cc_setting == 10:
+        ct.disable_color_scaling = True
+        ct.colors = color_lookups[0]
 
 
 def _decode_iter(ct, img, color_img, state_info={}):
@@ -341,7 +351,7 @@ def _decode_iter(ct, img, color_img, state_info={}):
         #matrix_colour_correction_Cheung2004
         #matrix_colour_correction_Finlayson2015
 
-        _calc_ccm(ct, color_lookups, cc_setting)
+        _calc_ccm(ct, color_lookups, cc_setting, state_info)
 
     print('beginning decode colors pass...')
     midX = conf.TOTAL_SIZE // 2
@@ -372,22 +382,19 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
     img = _preprocess_for_decode(color_img) if should_preprocess else color_img
 
     if color_correct:
-        from colormath.chromatic_adaptation import _get_adaptation_matrix
-        ct.ccm = white = _get_adaptation_matrix(numpy.array([*compute_tint(color_img, dark)]),
-                                        numpy.array([255, 255, 255]), 2, 'von_kries')
+        white = compute_tint(color_img, dark)
         if color_correct == 2:
+            from colormath.chromatic_adaptation import _get_adaptation_matrix
+            ct.ccm = _get_adaptation_matrix(numpy.array([*white]),
+                                            numpy.array([255, 255, 255]), 2, 'von_kries')
             for _ in _decode_iter(ct, img, color_img):
                 pass
             clusters = ClusterSituation(ct.color_metrics, 2**BITS_PER_COLOR)
             clusters.plot('/tmp/foo.png')
             clusters.index = {i: ct.best_color(*k) for i,k in enumerate(clusters.centers())}
             ct.color_clusters = clusters
-
-            '''observed = [c for _, c in ct.color_metrics]
-            exp = numpy.array(possible_colors(dark, BITS_PER_COLOR))
-            from colour.characterisation.correction import matrix_colour_correction_Cheung2004
-            der = matrix_colour_correction_Cheung2004(observed, exp)
-            ct.ccm = der.dot(white)'''
+        else:
+            state_info['white'] = white
 
     yield from _decode_iter(ct, img, color_img, state_info)
 
@@ -583,4 +590,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
