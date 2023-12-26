@@ -291,8 +291,8 @@ def _calc_ccm(ct, color_lookups, cc_setting, state_info):
     splits = 2 if cc_setting in (6, 7) else 0
     if cc_setting in (3, 4, 5):
         possible = possible_colors(ct.dark, BITS_PER_COLOR)
-        #if len(color_lookups[0]) < len(possible):
-        #    return
+        if len(color_lookups[0]) < len(possible):
+            raise Exception("kabooski")
         exp = [color for i,color in enumerate(possible) if i in color_lookups[0]] + [(255,255,255)]
         exp = numpy.array(exp)
         white = state_info['white']
@@ -338,6 +338,12 @@ def _decode_iter(ct, img, color_img, state_info={}):
         yield -1, None
 
     # state_info can be set at any time, but it will probably be set by the caller *after* the empty yield above
+    if state_info.get('color_correct') == 1:
+        white = state_info['white']
+        from colormath.chromatic_adaptation import _get_adaptation_matrix
+        ct.ccm = _get_adaptation_matrix(numpy.array([*white]),
+                                        numpy.array([255, 255, 255]), 2, 'von_kries')
+
     if state_info.get('headers'):
         print('now would be a good time to use the color index')
         cc_setting = state_info['color_correct']
@@ -383,18 +389,8 @@ def decode_iter(src_image, dark, should_preprocess, color_correct, deskew, auto_
 
     if color_correct:
         white = compute_tint(color_img, dark)
-        if color_correct == 2:
-            from colormath.chromatic_adaptation import _get_adaptation_matrix
-            ct.ccm = _get_adaptation_matrix(numpy.array([*white]),
-                                            numpy.array([255, 255, 255]), 2, 'von_kries')
-            for _ in _decode_iter(ct, img, color_img):
-                pass
-            clusters = ClusterSituation(ct.color_metrics, 2**BITS_PER_COLOR)
-            clusters.plot('/tmp/foo.png')
-            clusters.index = {i: ct.best_color(*k) for i,k in enumerate(clusters.centers())}
-            ct.color_clusters = clusters
-        else:
-            state_info['white'] = white
+        state_info['white'] = white
+        state_info['color_correct'] = color_correct
 
     yield from _decode_iter(ct, img, color_img, state_info)
 
@@ -446,7 +442,6 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                     iw = second_pass
                     if fount:
                         state_info['headers'] = fount.headers
-                        state_info['color_correct'] = color_correct
                     continue
                 block = interleave_lookup[i] // block_size
                 iw.write(bits, block)
