@@ -2,13 +2,14 @@ import random
 from os import path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 import cv2
 import numpy
 
 from cimbar.cimbar import encode, decode, bits_per_op
 from cimbar.encode.rss import reed_solomon_stream
-from cimbar.grader import evaluate as evaluate_grader
+from cimbar.grader import evaluate_split, evaluate_interleaved
 
 
 CIMBAR_ROOT = path.abspath(path.join(path.dirname(path.realpath(__file__)), '..'))
@@ -78,7 +79,7 @@ class CimbarTest(TestCase):
         self.assertEqual(contents, self._src_data()[:7500])
 
     def validate_grader(self, out_path, target):
-        num_bits = evaluate_grader(self.decode_clean, out_path, bits_per_op(), True)
+        num_bits = evaluate_split(self.decode_clean, out_path, bits_per_op(), 2)
         self.assertLess(num_bits, target)
 
     def test_decode_simple(self):
@@ -112,7 +113,8 @@ class CimbarTest(TestCase):
         decode([skewed_image], out_no_ecc, dark=True, ecc=0, force_preprocess=True)
         self.validate_grader(out_no_ecc, 4000)
 
-    def test_decode_sample(self):
+    @patch('cimbar.cimbar.use_split_mode', lambda: False)
+    def test_decode_sample_mode4c(self):
         clean_image = 'samples/6bit/4color_ecc30_0.png'
         warped_image = 'samples/6bit/4_30_802.jpg'
 
@@ -122,7 +124,20 @@ class CimbarTest(TestCase):
         warped_bits = self._temp_path('outfile_warped.txt')
         decode([warped_image], warped_bits, dark=True, ecc=0, force_preprocess=True, auto_dewarp=False)
 
-        num_bits = evaluate_grader(clean_bits, warped_bits, bits_per_op(), True)
+        num_bits = evaluate_interleaved(clean_bits, warped_bits, bits_per_op())
+        self.assertLess(num_bits, 350)
+
+    def test_decode_sample_modeb(self):
+        clean_image = 'samples/b/tr_0.png'
+        warped_image = 'samples/b/ex2434.jpg'
+
+        clean_bits = self._temp_path('outfile_clean.txt')
+        decode([clean_image], clean_bits, dark=True, ecc=0, auto_dewarp=False)
+
+        warped_bits = self._temp_path('outfile_warped.txt')
+        decode([warped_image], warped_bits, dark=True, ecc=0, force_preprocess=True, auto_dewarp=False)
+
+        num_bits = evaluate_split(clean_bits, warped_bits, bits_per_op(), 2)
         self.assertLess(num_bits, 350)
 
 
@@ -145,10 +160,10 @@ class RoundtripTest(TestCase):
         encode(self.src_file, dst_image, dark=True, fountain=True)
 
         out_path = path.join(self.temp_dir.name, 'out.txt')
-        decode([dst_image], out_path, dark=True, deskew=False, auto_dewarp=False, fountain=True)
+        decode([dst_image], out_path, dark=True, deskew=False, auto_dewarp=False, fountain=True, color_correct=3)
 
         with open(out_path, 'rb') as f:
             contents = f.read()
         with open(self.src_file, 'rb') as f:
             expected = f.read()
-        self.assertEquals(contents, expected)
+        self.assertEqual(contents, expected)

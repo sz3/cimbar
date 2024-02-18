@@ -48,7 +48,6 @@ from cimbar.encode.rss import reed_solomon_stream
 from cimbar.fountain.header import fountain_header
 from cimbar.util.bit_file import bit_file
 from cimbar.util.interleave import interleave, interleave_reverse, interleaved_writer
-from cimbar.util.clustering import ClusterSituation
 
 
 BITS_PER_COLOR=conf.BITS_PER_COLOR
@@ -224,8 +223,8 @@ def _decode_cell(ct, img, x, y, drift):
 def _preprocess_for_decode(img):
     ''' This might need to be conditional based on source image size.'''
     img = cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
-    #kernel = numpy.array([[-1.0,-1.0,-1.0], [-1.0,8.5,-1.0], [-1.0,-1.0,-1.0]])
-    #img = cv2.filter2D(img, -1, kernel)
+    kernel = numpy.array([[-1.0,-1.0,-1.0], [-1.0,8.5,-1.0], [-1.0,-1.0,-1.0]])
+    img = cv2.filter2D(img, -1, kernel)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = Image.fromarray(img)
     return img

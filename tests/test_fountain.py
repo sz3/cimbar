@@ -47,7 +47,7 @@ class FountainTest(TestCase):
         data = b'0123456789' * 100
         inbuff = BytesIO(data)
 
-        fes = fountain_encoder_stream(inbuff, 400)
+        fes = fountain_encoder_stream(inbuff, 400, encode_id=0)
         r = fes.read(400)
 
         self.assertEqual(b'\x00\x00\x03\xe8\x00\x00' + data[:394], r)
