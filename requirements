@@ -1,4 +1,4 @@
-bitstring
+bitstring==3.1.9
 colour-science
 docopt
 imagehash
