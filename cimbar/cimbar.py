@@ -291,7 +291,7 @@ def _calc_ccm(ct, color_lookups, cc_setting, state_info):
     if cc_setting in (3, 4, 5):
         possible = possible_colors(ct.dark, BITS_PER_COLOR)
         if len(color_lookups[0]) < len(possible):
-            raise Exception("kabooski")
+            raise Exception("kaboomski")  # not clear whether this should throw or not, really.
         exp = [color for i,color in enumerate(possible) if i in color_lookups[0]] + [(255,255,255)]
         exp = numpy.array(exp)
         white = state_info['white']
@@ -344,7 +344,6 @@ def _decode_iter(ct, img, color_img, state_info={}):
                                         numpy.array([255, 255, 255]), 2, 'von_kries')
 
     if state_info.get('headers'):
-        print('now would be a good time to use the color index')
         cc_setting = state_info['color_correct']
         splits = 2 if cc_setting in (6, 7) else 0
 
@@ -352,9 +351,6 @@ def _decode_iter(ct, img, color_img, state_info={}):
         color_lookups = _derive_color_lookups(ct, color_img, cells, state_info.get('headers'), splits)
         print('color lookups:')
         print(color_lookups)
-
-        #matrix_colour_correction_Cheung2004
-        #matrix_colour_correction_Finlayson2015
 
         _calc_ccm(ct, color_lookups, cc_setting, state_info)
 
@@ -425,7 +421,6 @@ def decode(src_images, outfile, dark=False, ecc=conf.ECC, fountain=False, force_
                 second_pass = None
 
             # this is a bit goofy, might refactor it to have less "loop through writers" weirdness
-            # ok, gonna *have* to rewrite it to get at + pass the fountain header anyway...
             iw = first_pass
             state_info = {}
             for i, bits in decode_iter(
