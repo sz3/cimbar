@@ -26,7 +26,7 @@ Options:
   --config=<config>                Choose configuration from sq8x8,sq5x5,sq5x6. [default: sq8x8]
   --dark                           Use dark palette. [default]
   --light                          Use light palette.
-  --color-correct=<0-2>            Color correction. 0 is off. 1 is white balance. 2 is 2-pass least squares. [default: 1]
+  --color-correct=<0-7>            Color correction. 0 is off. 1 is white balance. 3 is 2-pass on a fountain-encoded image. [default: 1]
   --deskew=<0-2>                   Deskew level. 0 is no deskew. Should usually be 0 or default. [default: 1]
   --preprocess=<0,1>               Sharpen image before decoding. Default is to guess. [default: -1]
 """
