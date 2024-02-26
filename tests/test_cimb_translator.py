@@ -29,8 +29,8 @@ class CimbDecoderTest(TestCase):
         self.assertEqual(decoded, 5)
         self.assertEqual(error, 0)
 
-        color = cimb.decode_color(img)
-        self.assertEqual(color, 0 << 4)
+        color = cimb.decode_color(img, 0)
+        self.assertEqual(color, 1)
 
         img2 = Image.open(path.join(CIMBAR_ROOT, 'tests', 'sample', '25.png'))
         img2 = img2.convert('RGB')
@@ -38,5 +38,5 @@ class CimbDecoderTest(TestCase):
         self.assertEqual(decoded, 5)
         self.assertEqual(error, 0)
 
-        color = cimb.decode_color(img2)
-        self.assertEqual(color, 1 << 4)
+        color = cimb.decode_color(img2, 0)
+        self.assertEqual(color, 2)

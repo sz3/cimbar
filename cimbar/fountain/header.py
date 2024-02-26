@@ -32,3 +32,7 @@ class fountain_header:
         total_size = total_size | ((encode_id & 0x80) << 17)
         encode_id = encode_id & 0x7F
         return encode_id, total_size, chunk_id
+
+    def bad(self):
+        return self.encode_id == 0 and self.total_size == 0 and self.chunk_id
+

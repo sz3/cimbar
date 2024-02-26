@@ -5,7 +5,7 @@
 cimbar is a proof-of-concept 2D data encoding format -- much like [QR Codes](https://en.wikipedia.org/wiki/QR_code), [JAB codes](https://jabcode.org/), and [Microsoft's HCCB](https://en.wikipedia.org/wiki/High_Capacity_Color_Barcode).
 
 <p align="center">
-<img src="https://github.com/sz3/cimbar-samples/blob/v0.5/6bit/4color_ecc30_fountain_0.png" width="70%" title="an example cimbar code" >
+<img src="https://github.com/sz3/cimbar-samples/blob/v0.6/b/4cecc30f.png" width="70%" title="A non-animated mode-B cimbar code" >
 </p>
 
 ## How it works
@@ -33,16 +33,16 @@ The main constraints cimbar must deal with are:
 * all tiles in the tileset must be sufficient hamming distance away from each other, where *sufficient* is determined by whether the decoder can consistently place blurry or otherwise imperfect tiles in the correct "bucket".
 * all colors in the colorset must be far enough away from each other -- currently as a function of RGB value scaling -- such that color bleeding, reflections, and the like, can be overcome.
 
-In practice, this means that the source image should be around 900x900 resolution or greater, with reasonable color correction handled by the camera -- as you'd find in any modern cell phone.
+Cimbar is designed to deal with some lossiness. In practice, the source image should be around 700x700 resolution or greater, in focus, and with *some* color correction handled by the camera -- as you'll hopefully find in any modern cell phone.
 
-This python cimbar implementation is a research project. It works, but it is not very performant, and does not handle error cases with much grace. [libcimbar](https://github.com/sz3/libcimbar), the C++ implementation, has been much more heavily optimized and tested. The target goals of the proof-of-concept were:
+This python cimbar implementation is a research project. It works, but it is slow, and does not handle error cases with much grace. [libcimbar](https://github.com/sz3/libcimbar), the C++ implementation, has been much more heavily optimized and tested. The target goals of the proof-of-concept were:
 1. achieve data density on the order of _10kb_ per image.
 2. validate a theoretical performance (and if possible, an implemented demonstration) of >= _100kb/s_ data transfer (800 kilobits/second) from a computer screen to a cell phone, using only animated cimbar codes and the cell phone camera.
 
 ## I want numbers!
 
-* a 6-bit cimbar image contains `9300` raw bytes of data, and `7500` bytes with the default error correction level (30)
-* for 7-bit cimbar, the respective numbers are `10850` and `8750`
+* a `mode B` (8x8, 4-color, 30/155 ecc, 6-bits-per-tile) cimbar image contains `9300` raw bytes of data, and `7500` bytes with the default error correction level (30)
+* for the old `mode 8C` (8x8, 8-color, 7-bit) cimbar, the respective numbers are `10850` and `8750`
 * error correction level is `N/155`. So `ecc=30` corresponds to a `30:125` ratio of error correction bytes to "real" bytes.
 	* error correction is (for now) done via Reed Solomon, which contibutes to the rather large ratio of error correction bytes. See [ABOUT](ABOUT.md) for more technical discussion.
 

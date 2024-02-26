@@ -22,8 +22,7 @@ from os.path import getsize
 
 from docopt import docopt
 
-from cimbar.cimbar import bits_per_op as bpo
-from cimbar.conf import BITS_PER_SYMBOL
+from cimbar.conf import BITS_PER_SYMBOL, BITS_PER_COLOR
 from cimbar.util.bit_file import bit_file
 
 
@@ -99,6 +98,26 @@ class Grader():
         self.mismatch_by_symbol[actual_symbols] += symbol_err
         self.mismatch_by_color[actual_color] += color_err
 
+    def grade_symbol(self, expected_bits, actual_bits):
+        err = bin(expected_bits ^ actual_bits).count('1')
+        if err:
+            self.error_bits += err
+            self.error_tiles += 1
+
+        self.symbol_error_bits += err
+        self.errors_by_symbol[expected_bits] += err
+        self.mismatch_by_symbol[actual_bits] += err
+
+    def grade_color(self, expected_bits, actual_bits):
+        err = bin(expected_bits ^ actual_bits).count('1')
+        if err:
+            self.error_bits += err
+            self.error_tiles += 1
+
+        self.color_error_bits += err
+        self.errors_by_color[expected_bits] += err
+        self.mismatch_by_color[actual_bits] += err
+
     def print_report(self):
         _print_sorted(self.errors_by_symbol)
         _print_sorted(self.errors_by_color)
@@ -114,7 +133,7 @@ class Grader():
         print(f'color error bits: {self.color_error_bits}')
 
 
-def evaluate(src_file, dst_file, bits_per_op, dark):
+def evaluate_interleaved(src_file, dst_file, bits_per_op):
     g = Grader()
 
     total_bits = getsize(src_file) * 8
@@ -131,14 +150,41 @@ def evaluate(src_file, dst_file, bits_per_op, dark):
     return g.error_bits
 
 
+def evaluate_split(src_file, dst_file, bits_per_symbol, bits_per_color):
+    g = Grader()
+
+    bits_per_op = bits_per_symbol + bits_per_color
+    total_bits = getsize(src_file) * 8
+    symbol_bits = total_bits * bits_per_symbol // bits_per_op
+
+    i = 0
+    with bit_file(src_file, bits_per_symbol) as sf, bit_file(dst_file, bits_per_symbol) as df:
+
+        while i < symbol_bits:
+            expected_bits = sf.read(bits_per_symbol)
+            actual_bits = df.read(bits_per_symbol)
+            g.grade_symbol(expected_bits, actual_bits)
+            i += bits_per_symbol
+
+        while i < total_bits:
+            expected_bits = sf.read(bits_per_color)
+            actual_bits = df.read(bits_per_color)
+            g.grade_color(expected_bits, actual_bits)
+            i += bits_per_color
+
+    g.print_report()
+    print(f'total bits: {total_bits}')
+    return g.error_bits
+
+
 def main():
-    args = docopt(__doc__, version='cimbar fitness check 0.0.1')
+    args = docopt(__doc__, version='cimbar fitness check 0.1')
 
     src_file = args['<decoded_baseline>']
     dst_file = args['<decoded_messy>']
-    dark = args.get('--dark')
-    bits_per_op = int(args.get('--bits-per-op') or bpo())
-    evaluate(src_file, dst_file, bits_per_op, dark)
+    bits_per_symbol = int(args.get('--bits-per-symbol') or BITS_PER_SYMBOL)
+    bits_per_color = int(args.get('--bits-per-color') or BITS_PER_COLOR)
+    evaluate_split(src_file, dst_file, bits_per_symbol, bits_per_color)
 
 
 if __name__ == '__main__':

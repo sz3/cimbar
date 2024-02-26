@@ -30,7 +30,7 @@ My conclusion was that if I was going to create a proof-of-concept implementatio
 
 Not yet. The project is -- at this point -- just a proof-of-concept. It's not clear to me that cimbar is any better for data density + reliability than HCCB, or better than the myriad of unfinished attempts at color QR codes that are floating around, or (...). It could be a technological dead end. But perhaps with more refinement it might be interesting?
 
-## Notable open questions, concerns, and ideas:
+## Unresolved design questions, concerns, and ideas:
 
 * the symbol set is not optimal. There are 16, and their image hashes are all reasonable hamming distance from each other, and do *ok* when upscaled... but I drew the initial 40 or so candidates by hand in kolourpaint, and paired down the set to 16 by experimentation.
 	* 32 distinct tiles (5 bits) be possible for 8x8 tiles
@@ -52,12 +52,11 @@ Not yet. The project is -- at this point -- just a proof-of-concept. It's not cl
 	* 8-color cimbar (3 color bits) is possible, at least in dark mode
 		* probably light mode as well, but a palette will need to be found
 	* 16-color cimbar does not seem possible with the current color decoding logic
-		* but with pre-processing for color correction and a perceptual color diff (like CIE76), ... maybe?
-		* this may be wishful thinking.
+		* ...at least not in the small (sub-8x8) tile sizes we want to use for high data density
 
 * Reed Solomon was chosen for error correction due how ubiquitous its implementations are.
 	* it isn't a perfect fit. Most cimbar errors are 1-3 flipped bits at a time -- Reed Solomon doesn't care if one bit flipped or eight did -- a bad byte is a bad byte.
-	* Something built on LDPC would likely be better.
+	* Something that cares about bits and not bytes (LDPC? idk) would likely be better.
 
 * the focus on computer screens has surely overlooked problems that come from paper/printed/e-paper surfaces
 	* using a black background ("dark mode") came out of getting better results from backlit screens
@@ -65,8 +64,8 @@ Not yet. The project is -- at this point -- just a proof-of-concept. It's not cl
 	* curved surfaces are a can of worms I didn't want to open -- there are some crazy ideas that could be pursued there, but they may not be worth the effort
 
 * should cimbar include "metadata" to tell the decoder what it's trying to decode -- ECC level, number of colors, (grid size...?)
-	* the bottom right corner of the image seems like the logical place for this.
-	* a slightly smaller 4th anchor pattern could give us 11 tiles (44 bits?) to work with for metadata, which is not a lot, but probably enough.
+	* the bottom right corner of the image seems like the logical place for this. However, differing aspect ratios may be a problem
+	* example: on 8x8, a slightly smaller 4th anchor pattern could give us 11 tiles (44 bits?) to work with for metadata, which is not a lot, but probably enough to be useful.
 
 
 ## Would you like to know more?

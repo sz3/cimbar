@@ -41,14 +41,15 @@ class bit_file:
             bits = Bits(uint=bits, length=self.bits_per_op)
         self.stream.append(bits)
 
-    def read(self):
+    def read(self, bits_per_op=None):
+        bits_per_op = bits_per_op or self.bits_per_op
         if self.read_count and self.stream.bitpos == self.stream.length:
             self.stream.clear()
             self.stream.append(Bits(bytes=self.f.read(self.read_size)))
             self.read_count -= 1
 
         try:
-            bits = self.stream.read(f'uint:{self.bits_per_op}')
+            bits = self.stream.read(f'uint:{bits_per_op}')
         except bitstring.ReadError:
             try:
                 bits = self.stream.read('uint')

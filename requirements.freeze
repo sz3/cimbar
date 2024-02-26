@@ -1,0 +1,14 @@
+bitstring==3.1.9
+colour-science
+docopt==0.6.2
+ImageHash==4.3.1
+imageio==2.34.0
+numpy==1.24.4
+opencv-python==4.9.0.80
+pillow==10.2.0
+PyWavelets==1.4.1
+reedsolo==1.7.0
+scipy==1.10.1
+typing-extensions==4.9.0
+zstandard==0.22.0
+https://github.com/sz3/pywirehair/archive/master.zip
