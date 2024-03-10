@@ -88,18 +88,38 @@ class sq5x5:
 
 
 class sq5x5wide:
-    TOTAL_SIZE = (1494, 1048)
+    TOTAL_SIZE = (1480, 1018)
     BITS_PER_SYMBOL = 2
     BITS_PER_COLOR = 2
     CELL_SIZE = 5
     CELL_SPACING_X = CELL_SIZE + 1
-    CELL_DIM_X = 249
-    CELL_DIM_Y = 172
+    CELL_DIM_X = 244
+    CELL_DIM_Y = 167
     CELLS_OFFSET = 9
-    ECC = 51
-    ECC_BLOCK_SIZE = 253
+    ECC = 33
+    ECC_BLOCK_SIZE = 163
     INTERLEAVE_PARTITIONS = 2
-    FOUNTAIN_BLOCKS = -7  # 28 (606) for 4c, 35 (606) for 8c
+    FOUNTAIN_BLOCKS = -5  # 20 (806) for 4c, 25 (806) for 8c
+
+    CELL_SPACING_Y = CELL_SPACING_X
+    INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
+    MARKER_SIZE_X = round(54 / CELL_SPACING_X)
+    MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
+
+
+class sq5x5lesswide:
+    TOTAL_SIZE = (1318, 1000)
+    BITS_PER_SYMBOL = 2
+    BITS_PER_COLOR = 2
+    CELL_SIZE = 5
+    CELL_SPACING_X = CELL_SIZE + 1
+    CELL_DIM_X = 217
+    CELL_DIM_Y = 164
+    CELLS_OFFSET = 9
+    ECC = 47
+    ECC_BLOCK_SIZE = 232
+    INTERLEAVE_PARTITIONS = 2
+    FOUNTAIN_BLOCKS = -5  # 20 (703) for 4c, 25 (703) for 8c
 
     CELL_SPACING_Y = CELL_SPACING_X
     INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
@@ -127,46 +147,6 @@ class sq5x5alt:
     MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
 
 
-class sq5x5beeg:
-    TOTAL_SIZE = 1048
-    BITS_PER_SYMBOL = 2
-    BITS_PER_COLOR = 2
-    CELL_SIZE = 5
-    CELL_SPACING_X = CELL_SIZE + 1
-    CELL_DIM_X = 172
-    CELLS_OFFSET = 9
-    ECC = 41
-    ECC_BLOCK_SIZE = 209
-    INTERLEAVE_PARTITIONS = 2
-    FOUNTAIN_BLOCKS = 0  # dynamic.. could be *2 or *3?
-
-    CELL_DIM_Y = CELL_DIM_X
-    CELL_SPACING_Y = CELL_SPACING_X
-    INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
-    MARKER_SIZE_X = round(54 / CELL_SPACING_X)
-    MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
-
-
-class sq5x6bad:
-    TOTAL_SIZE = 966
-    BITS_PER_SYMBOL = 2
-    BITS_PER_COLOR = 2
-    CELL_SIZE = 5
-    CELL_SPACING_X = CELL_SIZE
-    CELL_SPACING_Y = CELL_SIZE + 1
-    CELL_DIM_Y = 158
-    CELL_DIM_X = 190
-    CELLS_OFFSET = 9
-    ECC = 31
-    ECC_BLOCK_SIZE = 161
-    INTERLEAVE_PARTITIONS = 23  # or just leave ecc locked, and do 2,10?
-    FOUNTAIN_BLOCKS = 23
-
-    INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
-    MARKER_SIZE_X = round(54 / CELL_SPACING_X)
-    MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
-
-
 # this one is very flexible, probably good for experimenting with
 class sq5x6:
     TOTAL_SIZE = 958
@@ -181,7 +161,7 @@ class sq5x6:
     ECC = 35
     ECC_BLOCK_SIZE = 182
     INTERLEAVE_PARTITIONS = 2
-    FOUNTAIN_BLOCKS = 0  # dynamic ... should be *3, not *2...?
+    FOUNTAIN_BLOCKS = -4  # dynamic ... should be *3, not *2...?
 
     INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
     MARKER_SIZE_X = round(54 / CELL_SPACING_X)
@@ -201,7 +181,7 @@ class sq6x5:
     ECC = 35
     ECC_BLOCK_SIZE = 182
     INTERLEAVE_PARTITIONS = 2
-    FOUNTAIN_BLOCKS = 0  # dynamic ... should be *3, not *2...?
+    FOUNTAIN_BLOCKS = -4  # dynamic ... should be *3, not *2...?
 
     INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
     MARKER_SIZE_X = round(54 / CELL_SPACING_X)
@@ -273,29 +253,6 @@ class sq5x6w2:
     MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
 
 
-# swing for the fences
-class sq5x6beeg:
-    TOTAL_SIZE = (1326, 1036)
-    BITS_PER_SYMBOL = 2
-    BITS_PER_COLOR = 2
-    CELL_SIZE = 5
-    CELL_SPACING_X = CELL_SIZE
-    CELL_SPACING_Y = CELL_SIZE + 1
-    CELL_DIM_Y = 170
-    CELL_DIM_X = 262
-    CELLS_OFFSET = 9
-    ECC = 37
-    ECC_BLOCK_SIZE = 178
-    INTERLEAVE_PARTITIONS = 2
-    FOUNTAIN_BLOCKS = -3  # 12 for 4color, 15 for 8color
-
-    INTERLEAVE_BLOCKS = ECC_BLOCK_SIZE
-    MARKER_SIZE_X = round(54 / CELL_SPACING_X)
-    MARKER_SIZE_Y = round(54 / CELL_SPACING_Y)  # 6 or 9, probably
-
-
-# swing for the fences
-# tbd, haven't found good numbers yet... but 250 kb/s is reasonable????
 class sq6x5wide:
     TOTAL_SIZE = (1468, 1006)
     BITS_PER_SYMBOL = 2
@@ -325,4 +282,4 @@ def init(cls):
             continue
         setattr(this, k, v)
 
-init(sq6x5wide)
+init(sq8x9bw)
